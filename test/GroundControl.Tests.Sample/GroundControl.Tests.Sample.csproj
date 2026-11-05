@@ -6,7 +6,7 @@
         <OutputType>Exe</OutputType>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <RootNamespace>GroundControl.Sample</RootNamespace>
+        <RootNamespace>GroundControl.Tests.Sample</RootNamespace>
         <!-- Run by GroundControl.Tests, which starts the Docker Compose project; not run by dotnet test directly. -->
         <IsTestProject>false</IsTestProject>
         <IsPackable>false</IsPackable>

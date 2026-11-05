@@ -63,7 +63,7 @@ Debug the tests as usual: the test process within the container waits for a debu
 dotnet test
 ```
 
-`test/GroundControl.Tests` holds unit tests and integration tests (trait `Category=Docker`). The integration tests start the Docker Compose project of `test/GroundControl.Sample` (an nginx service), run the sample tests through GroundControl from the host, and remove the project afterwards; they are skipped when Docker is not available. To run the unit tests only: `dotnet test --filter "Category!=Docker"`.
+`test/GroundControl.Tests` holds unit tests and integration tests (trait `Category=Docker`). The integration tests start the Docker Compose project of `test/GroundControl.Tests.Sample` (an nginx service), run the sample tests through GroundControl from the host, and remove the project afterwards; they are skipped when Docker is not available. To run the unit tests only: `dotnet test --filter "Category!=Docker"`.
 
 ### Releases
 

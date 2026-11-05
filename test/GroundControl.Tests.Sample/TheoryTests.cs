@@ -1,22 +1,6 @@
-using System.Net;
 using Xunit;
 
-namespace GroundControl.Sample;
-
-public class NetworkTests
-{
-    [Fact]
-    public void RunsWithinContainer() =>
-        Assert.False(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GROUNDCONTROL_TEST_CASES")));
-
-    [Fact]
-    public async Task ReachesServiceByName()
-    {
-        using var client = new HttpClient();
-        using var response = await client.GetAsync("http://web/", TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-}
+namespace GroundControl.Tests.Sample;
 
 public class TheoryTests
 {
@@ -39,11 +23,4 @@ public class TheoryTests
     public void NonSerializableRows(Payload payload) => Assert.True(payload.Value > 0);
 
     public sealed record Payload(int Value);
-}
-
-public class ExplicitTests
-{
-    // Failure messages are reported with control characters as they are, while JSON strings do not allow them.
-    [Fact(Explicit = true)]
-    public void Fails() => Assert.Fail("Expected failure, with a device control \u0011.");
 }

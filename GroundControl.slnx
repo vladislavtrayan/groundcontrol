@@ -3,7 +3,7 @@
     <Project Path="src/GroundControl/GroundControl.csproj" />
   </Folder>
   <Folder Name="/test/">
-    <Project Path="test/GroundControl.Sample/GroundControl.Sample.csproj" />
+    <Project Path="test/GroundControl.Tests.Sample/GroundControl.Tests.Sample.csproj" />
     <Project Path="test/GroundControl.Tests/GroundControl.Tests.csproj" />
   </Folder>
 </Solution>

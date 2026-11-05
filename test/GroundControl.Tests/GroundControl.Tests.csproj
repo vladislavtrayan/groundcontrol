@@ -18,7 +18,7 @@
     <ItemGroup>
         <ProjectReference Include="..\..\src\GroundControl\GroundControl.csproj" />
         <!-- Built for the integration tests, which run it as a separate process. -->
-        <ProjectReference Include="..\GroundControl.Sample\GroundControl.Sample.csproj" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\GroundControl.Tests.Sample\GroundControl.Tests.Sample.csproj" ReferenceOutputAssembly="false" />
     </ItemGroup>
 
 </Project>

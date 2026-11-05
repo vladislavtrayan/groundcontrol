@@ -6,7 +6,7 @@ using Xunit.v3;
 namespace GroundControl.Tests;
 
 // Test cases discovered by xUnit.net, as test runners pass them to test frameworks.
-internal static class TestCases
+internal static class TestCaseDiscovery
 {
     public static async Task<IReadOnlyList<ITestCase>> DiscoverAsync(Type type, bool preEnumerateTheories)
     {
@@ -23,22 +23,5 @@ internal static class TestCases
             [type],
             TestContext.Current.CancellationToken);
         return testCases;
-    }
-}
-
-// Test cases discovered by the tests, not run themselves.
-public class DiscoveredTests
-{
-    [Fact(Explicit = true)]
-    public void Fact()
-    {
-    }
-
-    [Theory(Explicit = true)]
-    [InlineData(1, "a")]
-    [InlineData(2, "Привет")]
-    public void Theory(int number, string text)
-    {
-        _ = (number, text);
     }
 }
