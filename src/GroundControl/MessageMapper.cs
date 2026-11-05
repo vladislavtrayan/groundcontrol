@@ -20,7 +20,8 @@ internal class MessageMapper
     private readonly string? assemblyUniqueId;
     private readonly string? configFilePath;
     private readonly Dictionary<string, ITestCase> requested;
-    private readonly HashSet<string> started = [];
+    private readonly Dictionary<string, Progress> started = [];
+    private readonly HashSet<string> finished = [];
 
     public MessageMapper(string assemblyPath, IReadOnlyCollection<ITestCase> testCases)
     {
@@ -30,12 +31,26 @@ internal class MessageMapper
         this.requested = testCases.ToDictionary(testCase => testCase.UniqueID);
     }
 
-    // Requested test cases the remote test process has not run.
-    public IEnumerable<ITestCase> NotStarted => this.requested.Values.Where(testCase => !this.started.Contains(testCase.UniqueID));
+    // Requested test cases the remote test process has not finished: not run, or run but not finished (e.g., it has crashed running them).
+    public IEnumerable<PendingTestCase> Pending =>
+        this.requested.Values
+            .Where(testCase => !this.finished.Contains(testCase.UniqueID))
+            .Select(testCase => this.started.TryGetValue(testCase.UniqueID, out var progress)
+                ? new PendingTestCase(testCase, true, progress.Tests, progress.RunningTest)
+                : new PendingTestCase(testCase, false, 0, null));
+
+    // Results of the tests reported so far (as counted by the test assembly summary).
+    public int TestsTotal { get; private set; }
+
+    public int TestsFailed { get; private set; }
+
+    public int TestsSkipped { get; private set; }
+
+    public int TestsNotRun { get; private set; }
 
     // Returns the message mapped to the local test cases, or null if it is not a message (e.g., the output of the tests)
     // or it is not reported locally.
-    public string? Map(string line)
+    public MappedMessage? Map(string line)
     {
         JsonObject? message;
         try
@@ -65,10 +80,7 @@ internal class MessageMapper
                 return null;
             }
 
-            if (type == "test-case-starting")
-            {
-                this.started.Add(testCase);
-            }
+            this.Track(type, testCase, message);
         }
 
         // The remote test process reports the test assembly by its own unique ID (computed from its path within the container),
@@ -88,7 +100,47 @@ internal class MessageMapper
             }
         }
 
-        return Unescape(message.ToJsonString(JsonOptions));
+        return new MappedMessage(type, Unescape(message.ToJsonString(JsonOptions)));
+    }
+
+    private void Track(string type, string testCase, JsonObject message)
+    {
+        switch (type)
+        {
+            case "test-case-starting":
+                this.started.TryAdd(testCase, new Progress());
+                break;
+            case "test-starting":
+                var progress = this.started.TryGetValue(testCase, out var running) ? running : this.started[testCase] = new Progress();
+                progress.Tests++;
+                progress.RunningTest = message["TestUniqueID"]?.GetValue<string>();
+                break;
+            case "test-finished":
+                if (this.started.TryGetValue(testCase, out var finishing))
+                {
+                    finishing.RunningTest = null;
+                }
+
+                break;
+            case "test-case-finished":
+                this.finished.Add(testCase);
+                break;
+            case "test-passed":
+                this.TestsTotal++;
+                break;
+            case "test-failed":
+                this.TestsTotal++;
+                this.TestsFailed++;
+                break;
+            case "test-skipped":
+                this.TestsTotal++;
+                this.TestsSkipped++;
+                break;
+            case "test-not-run":
+                this.TestsTotal++;
+                this.TestsNotRun++;
+                break;
+        }
     }
 
     // xUnit.net writes control characters within strings as they are (e.g., in failure messages) and does not read them escaped,
@@ -106,4 +158,19 @@ internal class MessageMapper
                 json,
                 match => match.Groups[1].Success ? ((char)Convert.ToInt32(match.Groups[1].Value, 16)).ToString() : match.Value)
             : json;
+
+    // The tests of a test case the remote test process has started: their number, and the one running (not finished), if any.
+    private sealed class Progress
+    {
+        public int Tests { get; set; }
+
+        public string? RunningTest { get; set; }
+    }
 }
+
+// A message of the remote test process mapped to the local test cases: its type and its JSON.
+internal sealed record MappedMessage(string Type, string Json);
+
+// A requested test case the remote test process has not finished: whether it has started it, the number of its tests started
+// (the index of the next one), and the unique ID of its test running (started but not finished), if any.
+internal sealed record PendingTestCase(ITestCase TestCase, bool Started, int TestsStarted, string? RunningTest);

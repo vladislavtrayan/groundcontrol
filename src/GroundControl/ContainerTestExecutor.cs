@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
 using GroundControl.Configuration;
 using GroundControl.Debugging;
@@ -28,7 +29,7 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
         {
             // Reported as messages: test runners (e.g., VSTest adapter) wait for the test assembly to finish rather than for an exception.
             executionMessageSink.OnMessage(Xunit.v3.ErrorMessage.FromException(e));
-            var notStarted = ReportNotRun(mapper.NotStarted, e, executionMessageSink);
+            var failed = ReportFailed(mapper.Pending.ToList(), e, executionMessageSink);
             if (testCases.FirstOrDefault()?.TestCollection.TestAssembly is { } testAssembly)
             {
                 executionMessageSink.OnMessage(new Xunit.v3.TestAssemblyFinished
@@ -36,63 +37,72 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
                     AssemblyUniqueID = testAssembly.UniqueID,
                     ExecutionTime = 0,
                     FinishTime = DateTimeOffset.UtcNow,
-                    TestsFailed = notStarted,
-                    TestsNotRun = 0,
-                    TestsSkipped = 0,
-                    TestsTotal = testCases.Count,
+                    TestsFailed = mapper.TestsFailed + failed,
+                    TestsNotRun = mapper.TestsNotRun,
+                    TestsSkipped = mapper.TestsSkipped,
+                    TestsTotal = mapper.TestsTotal + failed,
                 });
             }
         }
     }
 
-    // Reports the test cases as failed by the cause and returns their number: test runners count the results only,
-    // so test cases without results are not run silently (e.g., dotnet test succeeds).
-    private static int ReportNotRun(IEnumerable<ITestCase> testCases, Exception cause, IMessageSink executionMessageSink)
+    // Reports the pending test cases as failed by the cause and returns their number: test runners count the results only,
+    // so test cases without results are not run silently (e.g., dotnet test succeeds). Messages the remote test process has reported
+    // (the test case and its tests starting) are not repeated.
+    private static int ReportFailed(IEnumerable<PendingTestCase> pending, Exception cause, IMessageSink executionMessageSink)
     {
         var (exceptionTypes, messages, stackTraces, exceptionParentIndices, failureCause) = ExceptionUtility.ExtractMetadata(cause);
         var now = DateTimeOffset.UtcNow;
         var count = 0;
-        foreach (var testCase in testCases)
+        foreach (var (testCase, started, testsStarted, runningTest) in pending)
         {
             count++;
             var assemblyUniqueId = testCase.TestCollection.TestAssembly.UniqueID;
-            var testUniqueId = UniqueIDGenerator.ForTest(testCase.UniqueID, 0);
-            executionMessageSink.OnMessage(new Xunit.v3.TestCaseStarting
+            var testUniqueId = runningTest ?? UniqueIDGenerator.ForTest(testCase.UniqueID, testsStarted);
+            if (!started)
             {
-                AssemblyUniqueID = assemblyUniqueId,
-                TestCollectionUniqueID = testCase.TestCollection.UniqueID,
-                TestClassUniqueID = testCase.TestClass?.UniqueID,
-                TestMethodUniqueID = testCase.TestMethod?.UniqueID,
-                TestCaseUniqueID = testCase.UniqueID,
-                Explicit = testCase.Explicit,
-                SkipReason = testCase.SkipReason,
-                SourceFilePath = testCase.SourceFilePath,
-                SourceLineNumber = testCase.SourceLineNumber,
-                TestCaseDisplayName = testCase.TestCaseDisplayName,
-                TestClassMetadataToken = testCase.TestClassMetadataToken,
-                TestClassName = testCase.TestClassName,
-                TestClassNamespace = testCase.TestClassNamespace,
-                TestClassSimpleName = testCase.TestClassSimpleName,
-                TestMethodMetadataToken = testCase.TestMethodMetadataToken,
-                TestMethodName = testCase.TestMethodName,
-                TestMethodParameterTypesVSTest = testCase.TestMethodParameterTypesVSTest,
-                TestMethodReturnTypeVSTest = testCase.TestMethodReturnTypeVSTest,
-                Traits = testCase.Traits,
-            });
-            executionMessageSink.OnMessage(new Xunit.v3.TestStarting
+                executionMessageSink.OnMessage(new Xunit.v3.TestCaseStarting
+                {
+                    AssemblyUniqueID = assemblyUniqueId,
+                    TestCollectionUniqueID = testCase.TestCollection.UniqueID,
+                    TestClassUniqueID = testCase.TestClass?.UniqueID,
+                    TestMethodUniqueID = testCase.TestMethod?.UniqueID,
+                    TestCaseUniqueID = testCase.UniqueID,
+                    Explicit = testCase.Explicit,
+                    SkipReason = testCase.SkipReason,
+                    SourceFilePath = testCase.SourceFilePath,
+                    SourceLineNumber = testCase.SourceLineNumber,
+                    TestCaseDisplayName = testCase.TestCaseDisplayName,
+                    TestClassMetadataToken = testCase.TestClassMetadataToken,
+                    TestClassName = testCase.TestClassName,
+                    TestClassNamespace = testCase.TestClassNamespace,
+                    TestClassSimpleName = testCase.TestClassSimpleName,
+                    TestMethodMetadataToken = testCase.TestMethodMetadataToken,
+                    TestMethodName = testCase.TestMethodName,
+                    TestMethodParameterTypesVSTest = testCase.TestMethodParameterTypesVSTest,
+                    TestMethodReturnTypeVSTest = testCase.TestMethodReturnTypeVSTest,
+                    Traits = testCase.Traits,
+                });
+            }
+
+            if (runningTest is null)
             {
-                AssemblyUniqueID = assemblyUniqueId,
-                TestCollectionUniqueID = testCase.TestCollection.UniqueID,
-                TestClassUniqueID = testCase.TestClass?.UniqueID,
-                TestMethodUniqueID = testCase.TestMethod?.UniqueID,
-                TestCaseUniqueID = testCase.UniqueID,
-                TestUniqueID = testUniqueId,
-                TestDisplayName = testCase.TestCaseDisplayName,
-                Explicit = testCase.Explicit,
-                StartTime = now,
-                Timeout = 0,
-                Traits = testCase.Traits,
-            });
+                executionMessageSink.OnMessage(new Xunit.v3.TestStarting
+                {
+                    AssemblyUniqueID = assemblyUniqueId,
+                    TestCollectionUniqueID = testCase.TestCollection.UniqueID,
+                    TestClassUniqueID = testCase.TestClass?.UniqueID,
+                    TestMethodUniqueID = testCase.TestMethod?.UniqueID,
+                    TestCaseUniqueID = testCase.UniqueID,
+                    TestUniqueID = testUniqueId,
+                    TestDisplayName = testCase.TestCaseDisplayName,
+                    Explicit = testCase.Explicit,
+                    StartTime = now,
+                    Timeout = 0,
+                    Traits = testCase.Traits,
+                });
+            }
+
             executionMessageSink.OnMessage(new Xunit.v3.TestFailed
             {
                 AssemblyUniqueID = assemblyUniqueId,
@@ -154,23 +164,8 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
         var docker = new DockerClient(options.Docker, options.DockerContext);
         var project = ComposeProject.Find(docker, options, assembly.Location);
         var container = await project.GetTestContainerAsync(assembly.Location, cancellation.Token);
-        await project.WaitUntilReadyAsync(container, cancellation.Token);
 
-        var arguments = new List<string> { "-automated", "async", "-noLogo", "-noColor" };
-        if (executionOptions.GetExplicitOption() is { } explicitOption)
-        {
-            arguments.AddRange(["-explicit", explicitOption.ToString().ToLowerInvariant()]);
-        }
-
-        if (executionOptions.GetDisableParallelization() == true)
-        {
-            arguments.AddRange(["-parallel", "none"]);
-        }
-
-        if (executionOptions.GetCulture() is { } culture)
-        {
-            arguments.AddRange(["-culture", culture.Length == 0 ? "invariant" : culture]);
-        }
+        List<string> arguments = ["-automated", "async", "-noLogo", "-noColor", .. Arguments(executionOptions)];
 
         // The debugger attaches to the remote test process, the tests wait for it.
         if (Debugger.IsAttached)
@@ -210,26 +205,29 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
             },
             line =>
             {
-                var assemblyFinished = line.Contains("\"test-assembly-finished\"");
-                finished |= assemblyFinished;
                 output.Enqueue(line);
                 if (output.Count > 20)
                 {
                     output.Dequeue();
                 }
 
-                // Requested test cases the remote test process has not run are reported before the test assembly finishes.
-                if (assemblyFinished)
+                if (mapper.Map(line) is not { } message)
                 {
-                    ReportNotRun(
-                        mapper.NotStarted.ToList(),
+                    return;
+                }
+
+                // Requested test cases the remote test process has not run are reported before the test assembly finishes.
+                if (message.Type == "test-assembly-finished")
+                {
+                    finished = true;
+                    ReportFailed(
+                        mapper.Pending.ToList(),
                         new InvalidOperationException($"The test case has not run in container {container.Name}."),
                         executionMessageSink);
                 }
 
-                if (mapper.Map(line) is { } json
-                    && MessageSinkMessageDeserializer.Deserialize(json, null) is { } message
-                    && !executionMessageSink.OnMessage(message))
+                if (MessageSinkMessageDeserializer.Deserialize(message.Json, null) is { } deserialized
+                    && !executionMessageSink.OnMessage(deserialized))
                 {
                     cancellation.Cancel();
                 }
@@ -241,5 +239,54 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
             throw new InvalidOperationException(
                 $"Tests have not finished in container {container.Name}:{Environment.NewLine}{string.Join(Environment.NewLine, output)}{Environment.NewLine}{errors}");
         }
+    }
+
+    // The execution options of the local test run as the arguments of the remote one (the ones not set are read from
+    // the runner configuration file next to the test assembly by the remote test process, as locally).
+    internal static List<string> Arguments(ITestFrameworkExecutionOptions executionOptions)
+    {
+        var arguments = new List<string>();
+        if (executionOptions.GetExplicitOption() is { } explicitOption)
+        {
+            arguments.AddRange(["-explicit", explicitOption.ToString().ToLowerInvariant()]);
+        }
+
+        if (executionOptions.GetDisableParallelization() == true)
+        {
+            arguments.AddRange(["-parallel", "none"]);
+        }
+
+        if (executionOptions.GetParallelAlgorithm() is { } parallelAlgorithm)
+        {
+            arguments.AddRange(["-parallelAlgorithm", parallelAlgorithm.ToString().ToLowerInvariant()]);
+        }
+
+        // 0 is the default (the number of processors), -1 is unlimited.
+        if (executionOptions.GetMaxParallelThreads() is { } maxParallelThreads and not 0)
+        {
+            arguments.AddRange(["-maxThreads", maxParallelThreads < 0 ? "unlimited" : maxParallelThreads.ToString(CultureInfo.InvariantCulture)]);
+        }
+
+        if (executionOptions.GetCulture() is { } culture)
+        {
+            arguments.AddRange(["-culture", culture.Length == 0 ? "invariant" : culture]);
+        }
+
+        if (executionOptions.GetSeed() is { } seed)
+        {
+            arguments.AddRange(["-seed", seed.ToString(CultureInfo.InvariantCulture)]);
+        }
+
+        if (executionOptions.GetStopOnTestFail() == true)
+        {
+            arguments.Add("-stopOnFail");
+        }
+
+        if (executionOptions.GetShowLiveOutput() == true)
+        {
+            arguments.Add("-showLiveOutput");
+        }
+
+        return arguments;
     }
 }
