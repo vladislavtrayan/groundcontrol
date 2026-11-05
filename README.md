@@ -67,7 +67,7 @@ dotnet test
 
 ### Releases
 
-Pushing a version tag (e.g., `v0.1.0`) runs the Release workflow: it builds the package and the Rider plugin of that version, publishes the package to nuget.org (trusted publishing, the nuget.org user in the `NUGET_USER` variable) and creates the GitHub release with both attached. Run manually, it builds both without publishing.
+Pushing a version tag (e.g., `0.1.0`) runs the Release workflow: it builds the package and the Rider plugin of that version, publishes the package to nuget.org (trusted publishing, the nuget.org user in the `NUGET_USER` variable) and creates the GitHub release with both attached. Run manually, it builds both without publishing.
 
 ## License
 
