@@ -1,0 +1,9 @@
+name: groundcontrol-sample
+
+services:
+  web:
+    image: nginx:alpine
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/" ]
+      interval: 2s
+      retries: 30
