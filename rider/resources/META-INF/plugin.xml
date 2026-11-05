@@ -1,5 +1,5 @@
 <idea-plugin>
-    <id>groundcontrol.rider</id>
+    <id>groundcontrol</id>
     <name>GroundControl</name>
     <vendor>Uladzislau Trayan</vendor>
     <version>0.2.0</version>
