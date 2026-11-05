@@ -30,7 +30,7 @@ internal static class GroundControlTestCases
 
     // A serialized object is "-3:<type name>:<members>" (Base64-encoded), its members are lines "<key>:<type>:<value>",
     // where values of objects are "<type name>:<members>"; the assembly path is the "ap" member of the test assembly.
-    private static string ReplaceAssemblyPath(string serialization, string assemblyPath)
+    internal static string ReplaceAssemblyPath(string serialization, string assemblyPath)
     {
         var parts = serialization.Split(':', 3);
         return parts is [ObjectType, var type, var members]

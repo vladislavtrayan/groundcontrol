@@ -1,6 +1,7 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Xunit.Sdk;
 
 namespace GroundControl;
@@ -11,6 +12,9 @@ internal class GroundControlMessageMapper
 {
     // xUnit.net JSON deserializer does not support escaped characters (e.g., '+' as '+').
     private static readonly JsonSerializerOptions JsonOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    // Escape sequences in order, so an escaped backslash followed by "u00" is not taken for an escaped control character.
+    private static readonly Regex EscapeSequence = new(@"\\(?:u00([01][0-9A-Fa-f])|.)", RegexOptions.Compiled);
 
     private readonly string assemblyPath;
     private readonly string? assemblyUniqueId;
@@ -84,18 +88,22 @@ internal class GroundControlMessageMapper
             }
         }
 
-        return message.ToJsonString(JsonOptions);
+        return Unescape(message.ToJsonString(JsonOptions));
     }
 
-    // Control characters are not escaped by the remote test process (e.g., in the output of a test), while JSON does not allow them
-    // within strings; a message is a line, so they occur within strings only.
-    private static string Escape(string line)
-    {
-        if (!line.Any(character => character < ' '))
-        {
-            return line;
-        }
+    // xUnit.net writes control characters within strings as they are (e.g., in failure messages) and does not read them escaped,
+    // while JSON does not allow them, so they are escaped to edit a message and written back as they are. A message is a line,
+    // so they occur within strings only.
+    private static string Escape(string line) =>
+        line.Any(character => character < ' ')
+            ? string.Concat(line.Select(character => character < ' ' ? $"\\u{(int)character:x4}" : character.ToString()))
+            : line;
 
-        return string.Concat(line.Select(character => character < ' ' ? $"\\u{(int)character:x4}" : character.ToString()));
-    }
+    // Control characters escaped by System.Text.Json (\u0000 to \u001F; others, e.g., \n, are read by xUnit.net) as they are.
+    private static string Unescape(string json) =>
+        json.Contains(@"\u00", StringComparison.Ordinal)
+            ? EscapeSequence.Replace(
+                json,
+                match => match.Groups[1].Success ? ((char)Convert.ToInt32(match.Groups[1].Value, 16)).ToString() : match.Value)
+            : json;
 }

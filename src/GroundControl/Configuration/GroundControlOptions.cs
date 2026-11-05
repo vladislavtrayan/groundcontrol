@@ -43,15 +43,21 @@ public sealed record GroundControlOptions
     // Debugger integration (see GroundControlDebuggers).
     public string? Debugger { get; init; }
 
-    public static GroundControlOptions Load(Assembly assembly)
+    public static GroundControlOptions Load(Assembly assembly) =>
+        Load(
+            assembly.GetCustomAttributes<AssemblyMetadataAttribute>().Select(attribute => (attribute.Key, attribute.Value)),
+            Environment.GetEnvironmentVariable);
+
+    // Loads the settings from the assembly metadata (key and value pairs) and the environment variables (by name).
+    internal static GroundControlOptions Load(IEnumerable<(string Key, string? Value)> assemblyMetadata, Func<string, string?> environment)
     {
-        var metadata = assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+        var metadata = assemblyMetadata
             .Where(attribute => attribute.Key.StartsWith(MetadataPrefix, StringComparison.OrdinalIgnoreCase))
             .GroupBy(attribute => attribute.Key[MetadataPrefix.Length..], StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.OrdinalIgnoreCase);
 
         string? Get(string name) =>
-            Environment.GetEnvironmentVariable(VariablePrefix + Regex.Replace(name, "(?<=[a-z])(?=[A-Z])", "_").ToUpperInvariant()) is { Length: > 0 } variable
+            environment(VariablePrefix + Regex.Replace(name, "(?<=[a-z])(?=[A-Z])", "_").ToUpperInvariant()) is { Length: > 0 } variable
                 ? variable
                 : metadata.GetValueOrDefault(name) is { Length: > 0 } value ? value : null;
 
