@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-label="GroundControl logo">
+  <rect x="0.5" y="0.5" width="179" height="179" rx="13.5" fill="#fff" stroke="#000"/>
+  <g fill="#000">
+    <circle cx="46" cy="46" r="15"/>
+    <circle cx="90" cy="46" r="15"/>
+    <circle cx="46" cy="90" r="15"/>
+    <circle cx="90" cy="90" r="15"/>
+    <circle cx="134" cy="90" r="15"/>
+    <circle cx="46" cy="134" r="15"/>
+    <circle cx="90" cy="134" r="15"/>
+    <circle cx="134" cy="134" r="15"/>
+    <path d="M134 33.5A12.5 12.5 0 0 1 134 58.5Z"/>
+  </g>
+  <circle cx="134" cy="46" r="12.5" fill="none" stroke="#000" stroke-width="5"/>
+</svg>

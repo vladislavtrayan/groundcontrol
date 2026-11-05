@@ -1,3 +1,6 @@
+<!-- An absolute URL, so the logo shows on nuget.org too (it renders the README of the package). -->
+<img src="https://raw.githubusercontent.com/vladislavtrayan/groundcontrol/main/assets/logo.svg" alt="GroundControl logo" width="96" height="96">
+
 # GroundControl
 
 Runs xUnit.net v3 tests within a container of a Docker Compose project wherever they are started from: an IDE, the command line or a pipeline. Tests address services by their Docker Compose names, as they do within the project network, while the test runner, the results and the debugger stay on the host.

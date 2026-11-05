@@ -20,6 +20,7 @@
         <Description>Runs xUnit.net v3 tests within a container of a Docker Compose project wherever they are started from (IDE, command line, pipeline), with the IDE debugger attached.</Description>
         <PackageTags>xunit;docker;compose;testing;integration-tests</PackageTags>
         <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageIcon>icon.png</PackageIcon>
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     </PropertyGroup>
@@ -31,6 +32,7 @@
 
     <ItemGroup>
         <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+        <None Include="..\..\assets\icon.png" Pack="true" PackagePath="\" />
     </ItemGroup>
 
     <ItemGroup>
