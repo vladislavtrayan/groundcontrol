@@ -67,10 +67,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The JDK of the Rider SDK (minRequiredJavaVersion of its product-info.json), so javac reads its class files.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 25
 
       # The plugin is compiled against the platform libraries only (Rider classes are loaded by reflection).
       - name: Rider SDK
