@@ -172,18 +172,10 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
             arguments.Add("-waitForDebugger");
         }
 
-        // The local test cases are run as they are (see TestCaseSerialization); the remote test process discovers only their methods,
-        // as test cases are run once discovered.
+        // The local test cases are run as they are (see TestCaseSerialization).
         var remoteAssemblyPath = container.MapPath(assembly.Location);
         var serializations = testCases.Select(testCase => TestCaseSerialization.Serialize(testCase, remoteAssemblyPath)).ToList();
-        var filterArguments = testCases
-            .Where(testCase => testCase.TestClassName is not null && testCase.TestMethodName is not null)
-            .Select(testCase => $"{testCase.TestClassName}.{testCase.TestMethodName}")
-            .Distinct()
-            .SelectMany(method => new[] { "-method", method })
-            .ToList();
 
-        var debuggers = Debugger.IsAttached ? Debuggers.Create(options) : [];
         var finished = false;
         var output = new Queue<string>();
         var errors = await ContainerProcess.RunAsync(
@@ -191,15 +183,13 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
             container,
             remoteAssemblyPath,
             arguments,
-            filterArguments,
             TestCaseSerialization.FileVariable,
             serializations,
             processId =>
             {
-                if (debuggers.Count > 0)
+                if (Debugger.IsAttached)
                 {
-                    var target = new GroundControlDebugTarget(container.Id, container.Name, processId, project.Directory, assembly.Location);
-                    _ = Debuggers.AttachAsync(debuggers, target, cancellation.Token);
+                    _ = Debuggers.AttachAsync(new DebugTarget(container.Id, container.Name, processId, project.Directory, assembly.Location), cancellation.Token);
                 }
             },
             line =>

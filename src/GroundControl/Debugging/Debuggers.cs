@@ -1,39 +1,30 @@
 using System.Diagnostics;
-using GroundControl.Configuration;
 
 namespace GroundControl.Debugging;
 
-// Debugger integrations, tried in order until one attaches the debugger; attaching manually is the last resort.
+// Attaches the debugger to a test process within the tests container, which waits for it when tests are debugged:
+// by the IDE integration (Rider), otherwise manually (the process is reported in the debug output of the IDE).
 internal static class Debuggers
 {
-    // The Debugger setting: Rider, Manual, or the assembly-qualified name of an IGroundControlDebugger implementation;
-    // by default, the built-in integrations.
-    public static IReadOnlyList<IGroundControlDebugger> Create(GroundControlOptions options) => options.Debugger?.ToLowerInvariant() switch
+    public static async Task AttachAsync(DebugTarget target, CancellationToken cancellationToken)
     {
-        null or "rider" => [new RiderDebugger(), new ManualDebugger()],
-        "manual" => [new ManualDebugger()],
-        _ => [Create(options.Debugger), new ManualDebugger()],
-    };
-
-    public static async Task AttachAsync(IReadOnlyList<IGroundControlDebugger> debuggers, GroundControlDebugTarget target, CancellationToken cancellationToken)
-    {
-        foreach (var debugger in debuggers)
+        try
         {
-            try
+            if (await RiderDebugger.AttachAsync(target, cancellationToken))
             {
-                if (await debugger.AttachAsync(target, cancellationToken))
-                {
-                    return;
-                }
-            }
-            catch (Exception e) when (!cancellationToken.IsCancellationRequested)
-            {
-                Debugger.Log(0, nameof(GroundControlTestFramework), $"{debugger.GetType().Name} has failed: {e.Message}{Environment.NewLine}");
+                return;
             }
         }
+        catch (Exception e) when (!cancellationToken.IsCancellationRequested)
+        {
+            Log($"Rider has failed to attach the debugger: {e.Message}");
+        }
+
+        Log($"Tests wait for the debugger: attach to process {target.ProcessId} in container {target.ContainerName} (e.g., Rider: Run | Attach to Process, Docker).");
     }
 
-    private static IGroundControlDebugger Create(string typeName) =>
-        Activator.CreateInstance(Type.GetType(typeName, throwOnError: true)!) as IGroundControlDebugger
-        ?? throw new InvalidOperationException($"{typeName} does not implement {nameof(IGroundControlDebugger)}.");
+    public static void Log(string message) => Debugger.Log(0, nameof(GroundControlTestFramework), message + Environment.NewLine);
 }
+
+// The test process to attach the debugger to, the Docker Compose project directory of the tests and the test assembly (e.g., to find the IDE project).
+internal sealed record DebugTarget(string ContainerId, string ContainerName, int ProcessId, string ProjectDirectory, string AssemblyPath);

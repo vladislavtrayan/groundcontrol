@@ -1,7 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using Xunit.Sdk;
 
 namespace GroundControl;
@@ -12,9 +11,6 @@ internal class MessageMapper
 {
     // xUnit.net JSON deserializer does not support escaped characters (e.g., '+' as '+').
     private static readonly JsonSerializerOptions JsonOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
-
-    // Escape sequences in order, so an escaped backslash followed by "u00" is not taken for an escaped control character.
-    private static readonly Regex EscapeSequence = new(@"\\(?:u00([01][0-9A-Fa-f])|.)", RegexOptions.Compiled);
 
     private readonly string assemblyPath;
     private readonly string? assemblyUniqueId;
@@ -85,11 +81,8 @@ internal class MessageMapper
 
         // The remote test process reports the test assembly by its own unique ID (computed from its path within the container),
         // while the test cases refer to the local one; test runners (e.g., the VSTest adapter) look up test metadata by it.
-        if (this.assemblyUniqueId is not null && message["AssemblyUniqueID"] is not null)
-        {
-            message["AssemblyUniqueID"] = this.assemblyUniqueId;
-        }
-
+        // Messages are passed as they are otherwise: xUnit.net writes control characters within them as they are (e.g., in failure
+        // messages) and does not read them escaped.
         if (type == "test-assembly-starting")
         {
             message["AssemblyPath"] = this.assemblyPath;
@@ -98,9 +91,20 @@ internal class MessageMapper
             {
                 message["ConfigFilePath"] = this.configFilePath;
             }
+
+            if (this.assemblyUniqueId is not null)
+            {
+                message["AssemblyUniqueID"] = this.assemblyUniqueId;
+            }
+
+            return new MappedMessage(type, message.ToJsonString(JsonOptions));
         }
 
-        return new MappedMessage(type, Unescape(message.ToJsonString(JsonOptions)));
+        return new MappedMessage(
+            type,
+            this.assemblyUniqueId is not null && message["AssemblyUniqueID"]?.GetValue<string>() is { } remoteAssemblyUniqueId
+                ? line.Replace($"\"{remoteAssemblyUniqueId}\"", $"\"{this.assemblyUniqueId}\"")
+                : line);
     }
 
     private void Track(string type, string testCase, JsonObject message)
@@ -143,21 +147,11 @@ internal class MessageMapper
         }
     }
 
-    // xUnit.net writes control characters within strings as they are (e.g., in failure messages) and does not read them escaped,
-    // while JSON does not allow them, so they are escaped to edit a message and written back as they are. A message is a line,
-    // so they occur within strings only.
+    // Control characters escaped to read a message (JSON does not allow them). A message is a line, so they occur within strings only.
     private static string Escape(string line) =>
         line.Any(character => character < ' ')
             ? string.Concat(line.Select(character => character < ' ' ? $"\\u{(int)character:x4}" : character.ToString()))
             : line;
-
-    // Control characters escaped by System.Text.Json (\u0000 to \u001F; others, e.g., \n, are read by xUnit.net) as they are.
-    private static string Unescape(string json) =>
-        json.Contains(@"\u00", StringComparison.Ordinal)
-            ? EscapeSequence.Replace(
-                json,
-                match => match.Groups[1].Success ? ((char)Convert.ToInt32(match.Groups[1].Value, 16)).ToString() : match.Value)
-            : json;
 
     private sealed class Progress
     {

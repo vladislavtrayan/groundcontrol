@@ -39,11 +39,9 @@ All optional, as assembly metadata of the test project (`<AssemblyMetadata Inclu
 | `Service` | a container per run | Docker Compose service running test processes, kept running (e.g., to keep debugger tools in it); its image needs `bash`. |
 | `Image` | .NET (or ASP.NET Core) image of the test assembly runtime | Image of the containers created for test runs; it needs `bash` (e.g., the Debian-based .NET images, not Alpine or chiseled ones). |
 | `Network` | the one most services are on | Network of the containers created for test runs. |
-| `ReadinessTimeout` | 5 minutes | How long to wait for the project to be ready: seconds, or a time span. |
-| `Readiness` | `AllServices` | `AllServices`: every service is healthy (or running without a healthcheck) and one-off services have completed; `None`: no wait. |
+| `ReadinessTimeout` | 5 minutes | How long to wait for the project to be ready (every service healthy, or running without a healthcheck, and one-off services completed): seconds, or a time span; `0` not to wait. |
 | `Docker` | `docker` | Docker CLI executable. |
 | `DockerContext` | current | Docker context. |
-| `Debugger` | `rider` | Debugger integration: `rider` (the Rider plugin, then manual), `manual` (logs how to attach), or a type name implementing `IGroundControlDebugger`. |
 
 ## Debugging
 

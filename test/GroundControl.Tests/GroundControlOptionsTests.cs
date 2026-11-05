@@ -14,7 +14,6 @@ public class GroundControlOptionsTests
         Assert.Null(options.Service);
         Assert.Equal("docker", options.Docker);
         Assert.Equal(TimeSpan.FromMinutes(5), options.ReadinessTimeout);
-        Assert.Equal(ReadinessPolicy.AllServices, options.Readiness);
     }
 
     [Fact]
@@ -50,10 +49,7 @@ public class GroundControlOptionsTests
     [Theory]
     [InlineData("90", 90)]
     [InlineData("00:02:00", 120)]
+    [InlineData("0", 0)]
     public void ParsesReadinessTimeout(string value, int seconds) =>
         Assert.Equal(TimeSpan.FromSeconds(seconds), GroundControlOptions.Load([("GroundControl.ReadinessTimeout", value)], _ => null).ReadinessTimeout);
-
-    [Fact]
-    public void ParsesReadiness() =>
-        Assert.Equal(ReadinessPolicy.None, GroundControlOptions.Load([("GroundControl.Readiness", "none")], _ => null).Readiness);
 }

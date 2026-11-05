@@ -55,10 +55,10 @@ public class MessageMapperTests
     public async Task KeepsControlCharacters()
     {
         var (mapper, testCases) = await CreateAsync();
-        var line = $"{{\"$type\":\"test-failed\",\"AssemblyUniqueID\":\"{testCases[0].TestCollection.TestAssembly.UniqueID}\","
-            + $"\"TestCaseUniqueID\":\"{testCases[0].UniqueID}\",\"Messages\":[\"device control \u0011, not one \\\\u0011\"]}}";
+        var line = $"{{\"$type\":\"test-failed\",\"AssemblyUniqueID\":\"remote-assembly\",\"TestCaseUniqueID\":\"{testCases[0].UniqueID}\","
+            + "\"Messages\":[\"device control \u0011, not one \\\\u0011\"]}";
 
-        Assert.Equal(line, mapper.Map(line)?.Json);
+        Assert.Equal(line.Replace("remote-assembly", testCases[0].TestCollection.TestAssembly.UniqueID), mapper.Map(line)?.Json);
     }
 
     [Theory]

@@ -30,19 +30,15 @@ public sealed record GroundControlOptions
     // Network of the containers created for test runs; by default, the one most services of the project are on.
     public string? Network { get; init; }
 
-    // How long to wait for the project to be ready: seconds, or a time span (e.g., 00:05:00).
+    // How long to wait for the project to be ready (every service healthy, or running if it has no healthcheck, and one-off services,
+    // e.g., migrations, completed successfully): seconds, or a time span (e.g., 00:05:00); 0 not to wait.
     public TimeSpan ReadinessTimeout { get; init; } = TimeSpan.FromMinutes(5);
-
-    public ReadinessPolicy Readiness { get; init; } = ReadinessPolicy.AllServices;
 
     // Docker CLI executable.
     public string Docker { get; init; } = "docker";
 
     // Docker context; by default, the current one.
     public string? DockerContext { get; init; }
-
-    // Debugger integration (see Debuggers).
-    public string? Debugger { get; init; }
 
     public static GroundControlOptions Load(Assembly assembly) =>
         Load(
@@ -73,20 +69,8 @@ public sealed record GroundControlOptions
             ReadinessTimeout = Get(nameof(ReadinessTimeout)) is { } timeout
                 ? int.TryParse(timeout, out var seconds) ? TimeSpan.FromSeconds(seconds) : TimeSpan.Parse(timeout, CultureInfo.InvariantCulture)
                 : defaults.ReadinessTimeout,
-            Readiness = Get(nameof(Readiness)) is { } readiness ? Enum.Parse<ReadinessPolicy>(readiness, ignoreCase: true) : defaults.Readiness,
             Docker = Get(nameof(Docker)) ?? defaults.Docker,
             DockerContext = Get(nameof(DockerContext)),
-            Debugger = Get(nameof(Debugger)),
         };
     }
-}
-
-public enum ReadinessPolicy
-{
-    // Every service of the project is healthy, or running if it has no healthcheck,
-    // and one-off services (e.g., migrations) have completed successfully.
-    AllServices,
-
-    // Tests run without waiting.
-    None,
 }

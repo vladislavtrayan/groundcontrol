@@ -50,8 +50,7 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
             {
                 [var container] => await ServiceTestContainer.InspectAsync(docker, container.Id, container.Name, cancellationToken),
                 [] => throw new InvalidOperationException(
-                    $"Tests container ({service} service) of Docker Compose project {await this.GetNameAsync(cancellationToken)} in {directory} is not running, "
-                    + "start it: docker compose up --detach --build"),
+                    $"Tests container ({service} service) of Docker Compose project in {directory} is not running, start it: docker compose up --detach --build"),
                 _ => throw new InvalidOperationException(
                     $"Multiple tests containers ({service} service) are running: {string.Join(", ", services.Select(container => container.Name))}."),
             };
@@ -65,8 +64,7 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
                 .OrderByDescending(group => group.Count())
                 .Select(group => group.Key)
                 .FirstOrDefault()
-            ?? throw new InvalidOperationException(
-                $"Docker Compose project {await this.GetNameAsync(cancellationToken)} in {directory} is not running, start it: docker compose up --detach --build");
+            ?? throw new InvalidOperationException($"Docker Compose project in {directory} is not running, start it: docker compose up --detach --build");
         return new TransientTestContainer(options.Image ?? TransientTestContainer.GetImage(assemblyPath), network, directory);
     }
 
@@ -74,7 +72,7 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
     // as services do not wait for each other: Docker Compose dependency conditions disable debugging of services in IDEs.
     private async Task WaitUntilReadyAsync(List<ComposeContainer> containers, TestContainer tests, CancellationToken cancellationToken)
     {
-        if (options.Readiness == ReadinessPolicy.None)
+        if (options.ReadinessTimeout <= TimeSpan.Zero)
         {
             return;
         }
@@ -102,20 +100,6 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
 
     private async Task<List<ComposeContainer>> GetContainersAsync(CancellationToken cancellationToken) =>
         (await docker.GetOutputAsync(this.Compose(["ps", "--all", "--format", "json"]), cancellationToken)).SelectMany(ComposeContainer.Parse).ToList();
-
-    // The project name resolved by Docker Compose (for messages).
-    private async Task<string> GetNameAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var config = await docker.GetOutputAsync(this.Compose(["config", "--format", "json"]), cancellationToken);
-            return JsonDocument.Parse(string.Concat(config)).RootElement.GetProperty("name").GetString() ?? "?";
-        }
-        catch (Exception e) when (e is InvalidOperationException or JsonException or KeyNotFoundException)
-        {
-            return options.Project ?? "?";
-        }
-    }
 
     private string[] Compose(string[] arguments) =>
         ["compose", "--project-directory", directory, .. options.Project is { } name ? ["--project-name", name] : Array.Empty<string>(), .. arguments];
