@@ -1,0 +1,14 @@
+<idea-plugin>
+    <id>groundcontrol.rider</id>
+    <name>GroundControl</name>
+    <vendor>ADBRO</vendor>
+    <version>0.1.0</version>
+    <description>Attaches the debugger to tests run within a container by GroundControl.</description>
+    <idea-version since-build="262"/>
+
+    <depends>com.intellij.modules.rider</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <httpRequestHandler implementation="groundcontrol.rider.AttachRequestHandler"/>
+    </extensions>
+</idea-plugin>
