@@ -1,0 +1,123 @@
+name: Release
+
+# On a version tag (e.g., v0.1.0): builds the package and the Rider plugin of that version, publishes the package to nuget.org
+# and creates the GitHub release with both attached. Run manually, it builds both as artifacts of the run without publishing.
+on:
+  push:
+    tags: [ 'v[0-9]+.[0-9]+.[0-9]+*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  # Rider SDK the plugin is compiled against (riderRD of the JetBrains repository), the earliest Rider it supports.
+  RIDER_SDK: '2026.2'
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-ci.$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+          fi
+
+  package:
+    name: NuGet package
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Build
+        run: dotnet build GroundControl.slnx --configuration Release -p:Version="$VERSION"
+
+      - name: Test
+        run: dotnet test GroundControl.slnx --configuration Release --no-build
+
+      - name: Pack
+        run: dotnet pack src/GroundControl/GroundControl.csproj --configuration Release --no-build -p:Version="$VERSION" --output artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: artifacts
+
+  plugin:
+    name: Rider plugin
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # The plugin is compiled against the platform libraries only (Rider classes are loaded by reflection).
+      - name: Rider SDK
+        run: |
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/rider.zip" \
+            "https://www.jetbrains.com/intellij-repository/releases/com/jetbrains/intellij/rider/riderRD/$RIDER_SDK/riderRD-$RIDER_SDK.zip"
+          unzip -q "$RUNNER_TEMP/rider.zip" 'lib/*' -d "$RUNNER_TEMP/rider"
+          rm "$RUNNER_TEMP/rider.zip"
+
+      - name: Build
+        shell: pwsh
+        run: ./rider/build.ps1 -Rider "$env:RUNNER_TEMP/rider" -Version "${{ needs.version.outputs.version }}" -NoInstall
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rider-plugin
+          path: rider/out/*.jar
+
+  publish:
+    name: Publish
+    if: github.ref_type == 'tag'
+    needs: [ package, plugin ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # GitHub release
+      id-token: write # nuget.org trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # A short-lived API key for the trusted publishing policy of this repository and workflow on nuget.org.
+      - uses: NuGet/login@v1
+        id: nuget
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      # Symbol packages (.snupkg) next to the packages are pushed with them.
+      - name: NuGet
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ steps.nuget.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json
+
+      - name: GitHub release
+        run: gh release create "$GITHUB_REF_NAME" artifacts/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

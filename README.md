@@ -46,7 +46,7 @@ All optional, as assembly metadata of the test project (`<AssemblyMetadata Inclu
 
 Debug the tests as usual: the test process within the container waits for a debugger, and the IDE is asked to attach to it.
 
-- **Rider**: install the plugin in `rider/` (`rider/build.ps1` builds it with the JDK bundled with Rider and installs it; restart Rider). Rider deploys its remote tools into the container on the first attach.
+- **Rider**: install the plugin, `groundcontrol-rider-<version>.jar` of the [releases](https://github.com/vladislavtrayan/groundcontrol/releases), by *Settings → Plugins → ⚙ → Install Plugin from Disk*, and restart Rider (or build and install it from the sources by `rider/build.ps1`). Rider deploys its remote tools into the container on the first attach.
 - **Other IDEs**: attach to the .NET process within the container by hand; the container and process ID are logged by the test run.
 
 ## Requirements
@@ -61,6 +61,10 @@ dotnet test
 ```
 
 `test/GroundControl.Tests` holds unit tests and integration tests (trait `Category=Docker`). The integration tests start the Docker Compose project of `test/GroundControl.Sample` (an nginx service), run the sample tests through GroundControl from the host, and remove the project afterwards; they are skipped when Docker is not available. To run the unit tests only: `dotnet test --filter "Category!=Docker"`.
+
+### Releases
+
+Pushing a version tag (e.g., `v0.1.0`) runs the Release workflow: it builds the package and the Rider plugin of that version, publishes the package to nuget.org (trusted publishing, the nuget.org user in the `NUGET_USER` variable) and creates the GitHub release with both attached. Run manually, it builds both without publishing.
 
 ## License
 

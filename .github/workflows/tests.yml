@@ -1,4 +1,4 @@
-name: CI
+name: Tests
 
 on:
   push:
@@ -16,6 +16,7 @@ env:
 jobs:
   # Unit tests and Docker integration tests (Linux runners run Linux containers), and the package.
   linux:
+    name: Linux (unit and Docker tests)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +49,7 @@ jobs:
 
   # Unit tests on Windows, the usual host of IDEs (Windows runners run Windows containers, so integration tests are skipped).
   windows:
+    name: Windows (unit tests)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
