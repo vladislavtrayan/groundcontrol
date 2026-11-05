@@ -30,15 +30,14 @@ Start the Docker Compose project (`docker compose up --detach --build`) and run 
 
 ## Settings
 
-All optional, as assembly metadata of the test project (`<AssemblyMetadata Include="GroundControl.Service" Value="tests" />`) or environment variables (`GROUNDCONTROL_SERVICE=tests`):
+All optional, as assembly metadata of the test project (`<AssemblyMetadata Include="GroundControl.Network" Value="backend" />`) or environment variables (`GROUNDCONTROL_NETWORK=backend`):
 
 | Setting | Default | Description |
 | --- | --- | --- |
 | `Project` | resolved by Docker Compose | Docker Compose project name. |
 | `ProjectDirectory` | closest Compose file | Docker Compose project directory (relative to the directory of the test assembly). |
-| `Service` | a container per run | Docker Compose service running test processes, kept running (e.g., to keep debugger tools in it); its image needs `bash`. |
-| `Image` | .NET (or ASP.NET Core) image of the test assembly runtime | Image of the containers created for test runs; it needs `bash` (e.g., the Debian-based .NET images, not Alpine or chiseled ones). |
-| `Network` | the one most services are on | Network of the containers created for test runs. |
+| `Image` | .NET (or ASP.NET Core) image of the test assembly runtime | Image of the tests containers; it needs `bash` (e.g., the Debian-based .NET images, not Alpine or chiseled ones). |
+| `Network` | the one most services are on | Network of the tests containers. |
 | `ReadinessTimeout` | 5 minutes | How long to wait for the project to be ready (every service healthy, or running without a healthcheck, and one-off services completed): seconds, or a time span; `0` not to wait. |
 | `Docker` | `docker` | Docker CLI executable. |
 | `DockerContext` | current | Docker context. |
@@ -47,7 +46,7 @@ All optional, as assembly metadata of the test project (`<AssemblyMetadata Inclu
 
 Debug the tests as usual: the test process within the container waits for a debugger, and the IDE is asked to attach to it.
 
-- **Rider**: install the plugin, `groundcontrol-rider-<version>.jar` of the [releases](https://github.com/vladislavtrayan/groundcontrol/releases), by *Settings → Plugins → ⚙ → Install Plugin from Disk*, and restart Rider (or build and install it from the sources by `rider/build.ps1`). Rider deploys its remote tools into the container on the first attach.
+- **Rider**: install the plugin, `groundcontrol-rider-<version>.jar` of the [releases](https://github.com/vladislavtrayan/groundcontrol/releases), by *Settings → Plugins → ⚙ → Install Plugin from Disk*, and restart Rider (or build and install it from the sources by `rider/build.ps1`). Rider deploys its remote tools into the container on the first attach; they are kept in the Docker volume `groundcontrol-debugger-tools` for the containers of later runs (remove the volume after upgrading Rider if attaching fails).
 - **Other IDEs**: attach to the .NET process within the container by hand; the container and process ID are logged by the test run.
 
 ## Requirements

@@ -27,4 +27,4 @@ internal static class Debuggers
 }
 
 // The test process to attach the debugger to, the Docker Compose project directory of the tests and the test assembly (e.g., to find the IDE project).
-internal sealed record DebugTarget(string ContainerId, string ContainerName, int ProcessId, string ProjectDirectory, string AssemblyPath);
+internal sealed record DebugTarget(string ContainerName, int ProcessId, string ProjectDirectory, string AssemblyPath);

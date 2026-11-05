@@ -5,8 +5,8 @@ using System.Text.RegularExpressions;
 namespace GroundControl.Configuration;
 
 // Settings of remote test runs, all optional: assembly metadata of the test assembly, e.g.,
-// <AssemblyMetadata Include="GroundControl.Service" Value="tests" /> in the test project, overridden by environment variables,
-// e.g., GROUNDCONTROL_SERVICE=tests (GROUNDCONTROL_ followed by the setting name in upper snake case).
+// <AssemblyMetadata Include="GroundControl.Network" Value="backend" /> in the test project, overridden by environment variables,
+// e.g., GROUNDCONTROL_NETWORK=backend (GROUNDCONTROL_ followed by the setting name in upper snake case).
 // GROUNDCONTROL_TEST_CASES is not a setting: it is set by the remote test process (see TestCaseSerialization).
 public sealed record GroundControlOptions
 {
@@ -20,14 +20,10 @@ public sealed record GroundControlOptions
     // containing a Compose file.
     public string? ProjectDirectory { get; init; }
 
-    // Docker Compose service running test processes (kept running, e.g., to keep debugger tools in it);
-    // by default, a container is created for each test run on the network of the project.
-    public string? Service { get; init; }
-
-    // Image of the containers created for test runs; by default, the .NET (or ASP.NET Core) image of the test assembly runtime.
+    // Image of the tests containers; by default, the .NET (or ASP.NET Core) image of the test assembly runtime.
     public string? Image { get; init; }
 
-    // Network of the containers created for test runs; by default, the one most services of the project are on.
+    // Network of the tests containers; by default, the one most services of the project are on.
     public string? Network { get; init; }
 
     // How long to wait for the project to be ready (every service healthy, or running if it has no healthcheck, and one-off services,
@@ -63,7 +59,6 @@ public sealed record GroundControlOptions
         {
             Project = Get(nameof(Project)),
             ProjectDirectory = Get(nameof(ProjectDirectory)),
-            Service = Get(nameof(Service)),
             Image = Get(nameof(Image)),
             Network = Get(nameof(Network)),
             ReadinessTimeout = Get(nameof(ReadinessTimeout)) is { } timeout

@@ -31,46 +31,27 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
             : throw new InvalidOperationException($"Docker Compose file ({string.Join(", ", ComposeFiles)}) is not found in directories of {assemblyPath}.");
     }
 
-    // The container of the configured Service, otherwise one created for the test run on the network of the project, once the project is ready.
+    // A container for the test run on the network of the project (the one most services are on, the default network of the project),
+    // once the project is ready.
     public async Task<TestContainer> GetTestContainerAsync(string assemblyPath, CancellationToken cancellationToken)
     {
         var containers = await this.GetContainersAsync(cancellationToken);
-        var tests = await this.GetTestContainerAsync(containers, assemblyPath, cancellationToken);
-        await this.WaitUntilReadyAsync(containers, tests, cancellationToken);
-        return tests;
-    }
-
-    private async Task<TestContainer> GetTestContainerAsync(List<ComposeContainer> containers, string assemblyPath, CancellationToken cancellationToken)
-    {
-        var running = containers.Where(container => container.State == "running").ToList();
-        if (options.Service is { } service)
-        {
-            var services = running.Where(container => container.Service == service).ToList();
-            return services switch
-            {
-                [var container] => await ServiceTestContainer.InspectAsync(docker, container.Id, container.Name, cancellationToken),
-                [] => throw new InvalidOperationException(
-                    $"Tests container ({service} service) of Docker Compose project in {directory} is not running, start it: docker compose up --detach --build"),
-                _ => throw new InvalidOperationException(
-                    $"Multiple tests containers ({service} service) are running: {string.Join(", ", services.Select(container => container.Name))}."),
-            };
-        }
-
-        // The network most services are on (the default network of the project).
         var network = options.Network
-            ?? running
+            ?? containers
+                .Where(container => container.State == "running")
                 .SelectMany(container => container.Networks.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 .GroupBy(name => name)
                 .OrderByDescending(group => group.Count())
                 .Select(group => group.Key)
                 .FirstOrDefault()
             ?? throw new InvalidOperationException($"Docker Compose project in {directory} is not running, start it: docker compose up --detach --build");
-        return new TransientTestContainer(options.Image ?? TransientTestContainer.GetImage(assemblyPath), network, directory);
+        await this.WaitUntilReadyAsync(containers, cancellationToken);
+        return new TestContainer(options.Image ?? TestContainer.GetImage(assemblyPath), network, directory);
     }
 
     // Waits until the services of the project are healthy and its one-off services (e.g., migrations) have completed,
     // as services do not wait for each other: Docker Compose dependency conditions disable debugging of services in IDEs.
-    private async Task WaitUntilReadyAsync(List<ComposeContainer> containers, TestContainer tests, CancellationToken cancellationToken)
+    private async Task WaitUntilReadyAsync(List<ComposeContainer> containers, CancellationToken cancellationToken)
     {
         if (options.ReadinessTimeout <= TimeSpan.Zero)
         {
@@ -80,7 +61,7 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
         var deadline = DateTime.UtcNow + options.ReadinessTimeout;
         while (true)
         {
-            var waiting = containers.Where(container => container.Name != tests.Name && !container.IsReady).ToList();
+            var waiting = containers.Where(container => !container.IsReady).ToList();
             if (waiting.Count == 0)
             {
                 return;
@@ -106,7 +87,7 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
 }
 
 // A container of the Docker Compose project (docker compose ps --format json).
-internal sealed record ComposeContainer(string Id, string Name, string Service, string State, string Health, int ExitCode, string Status, string Networks)
+internal sealed record ComposeContainer(string Id, string Name, string State, string Health, int ExitCode, string Status, string Networks)
 {
     // Healthy, running without a healthcheck, or completed successfully (one-off services).
     public bool IsReady =>
@@ -129,7 +110,6 @@ internal sealed record ComposeContainer(string Id, string Name, string Service, 
     private static ComposeContainer Parse(JsonElement json) => new(
         Get(json, "ID"),
         Get(json, "Name"),
-        Get(json, "Service"),
         Get(json, "State"),
         Get(json, "Health"),
         json.TryGetProperty("ExitCode", out var exitCode) && exitCode.ValueKind == JsonValueKind.Number ? exitCode.GetInt32() : 0,

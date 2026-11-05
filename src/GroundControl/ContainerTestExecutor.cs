@@ -189,7 +189,7 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
             {
                 if (Debugger.IsAttached)
                 {
-                    _ = Debuggers.AttachAsync(new DebugTarget(container.Id, container.Name, processId, project.Directory, assembly.Location), cancellation.Token);
+                    _ = Debuggers.AttachAsync(new DebugTarget(container.Name, processId, project.Directory, assembly.Location), cancellation.Token);
                 }
             },
             line =>

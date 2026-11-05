@@ -62,7 +62,7 @@ public class SampleProjectTests(SampleProject sample) : IClassFixture<SampleProj
     [Fact]
     public async Task ReportsTestsNotRunAsFailed()
     {
-        var run = await sample.RunAsync([], new Dictionary<string, string> { ["GROUNDCONTROL_SERVICE"] = "missing" });
+        var run = await sample.RunAsync([], new Dictionary<string, string> { ["GROUNDCONTROL_NETWORK"] = "missing" });
 
         Assert.NotEmpty(run.Of("error"));
         Assert.Empty(run.Of("test-passed"));

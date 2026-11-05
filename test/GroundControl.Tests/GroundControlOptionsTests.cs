@@ -11,7 +11,7 @@ public class GroundControlOptionsTests
         var options = GroundControlOptions.Load([], _ => null);
 
         Assert.Equal(new GroundControlOptions(), options);
-        Assert.Null(options.Service);
+        Assert.Null(options.Network);
         Assert.Equal("docker", options.Docker);
         Assert.Equal(TimeSpan.FromMinutes(5), options.ReadinessTimeout);
     }
@@ -20,30 +20,30 @@ public class GroundControlOptionsTests
     public void ReadsAssemblyMetadata()
     {
         var options = GroundControlOptions.Load(
-            [("GroundControl.Service", "tests"), ("groundcontrol.projectdirectory", "/src"), ("Other.Service", "other")],
+            [("GroundControl.Network", "backend"), ("groundcontrol.projectdirectory", "/src"), ("Other.Network", "other")],
             _ => null);
 
-        Assert.Equal("tests", options.Service);
+        Assert.Equal("backend", options.Network);
         Assert.Equal("/src", options.ProjectDirectory);
     }
 
     [Fact]
     public void PrefersEnvironmentVariables()
     {
-        var environment = new Dictionary<string, string> { ["GROUNDCONTROL_SERVICE"] = "ci", ["GROUNDCONTROL_DOCKER_CONTEXT"] = "remote" };
+        var environment = new Dictionary<string, string> { ["GROUNDCONTROL_NETWORK"] = "ci", ["GROUNDCONTROL_DOCKER_CONTEXT"] = "remote" };
 
-        var options = GroundControlOptions.Load([("GroundControl.Service", "tests")], environment.GetValueOrDefault);
+        var options = GroundControlOptions.Load([("GroundControl.Network", "backend")], environment.GetValueOrDefault);
 
-        Assert.Equal("ci", options.Service);
+        Assert.Equal("ci", options.Network);
         Assert.Equal("remote", options.DockerContext);
     }
 
     [Fact]
     public void IgnoresEmptyValues()
     {
-        var options = GroundControlOptions.Load([("GroundControl.Service", "tests")], name => name == "GROUNDCONTROL_SERVICE" ? string.Empty : null);
+        var options = GroundControlOptions.Load([("GroundControl.Network", "backend")], name => name == "GROUNDCONTROL_NETWORK" ? string.Empty : null);
 
-        Assert.Equal("tests", options.Service);
+        Assert.Equal("backend", options.Network);
     }
 
     [Theory]
