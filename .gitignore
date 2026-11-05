@@ -1,0 +1,7 @@
+bin/
+obj/
+artifacts/
+rider/out/
+.idea/
+.vs/
+*.user

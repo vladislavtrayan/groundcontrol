@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>GroundControl</RootNamespace>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>GroundControl</PackageId>
+        <Version>0.1.0</Version>
+        <Authors>ADBRO</Authors>
+        <Description>Runs xUnit.net v3 tests within a container of a Docker Compose project wherever they are started from (IDE, command line, pipeline), with the IDE debugger attached.</Description>
+        <PackageTags>xunit;docker;compose;testing;integration-tests</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3.extensibility.core" Version="2.0.2" />
+        <PackageReference Include="xunit.v3.runner.common" Version="2.0.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+</Project>
