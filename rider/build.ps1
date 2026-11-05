@@ -1,7 +1,7 @@
 # Builds the GroundControl Rider plugin (out/groundcontrol-rider-<version>.jar) and installs it into Rider (restart Rider to load it).
 # Compiles against Rider, or its SDK (riderRD from the JetBrains repository), with the JDK bundled with it, otherwise the one on PATH.
 param(
-    # Rider installation (or SDK) directory; by default, the latest Rider installed in Program Files or by JetBrains Toolbox.
+    # Rider installation (or SDK) directory, the latest installed (Program Files, JetBrains Toolbox) by default.
     [string] $Rider,
 
     # Plugin version, the one of plugin.xml by default.
@@ -15,7 +15,6 @@ $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 if (-not $Rider) {
-    # Installers put Rider into Program Files, JetBrains Toolbox into its own directories (the current and the previous ones).
     $installations = @(
         (Join-Path $Env:ProgramFiles "JetBrains"),
         (Join-Path $Env:LOCALAPPDATA "Programs"),

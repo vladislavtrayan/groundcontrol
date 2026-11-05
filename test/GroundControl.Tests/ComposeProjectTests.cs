@@ -29,7 +29,6 @@ public class ComposeProjectTests
         Assert.Throws<InvalidOperationException>(() => ComposeProject.Find(Docker, new GroundControlOptions(), assemblyPath));
     }
 
-    // The configured directory is relative to the test assembly, not to the working directory of the test process (an IDE, dotnet test).
     [Fact]
     public void ResolvesProjectDirectoryByAssembly()
     {

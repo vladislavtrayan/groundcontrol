@@ -94,7 +94,7 @@ final class ContainerAttacher {
     private record Debuggers(ProcessInfo process, List<? extends XAttachDebugger> debuggers) {
     }
 
-    // The process is not among the ones listed (the debugger tools are deployed), so deploying them does not help.
+    // The processes are listed, so deploying the debugger tools does not help.
     private static final class ProcessNotFoundException extends IllegalStateException {
         ProcessNotFoundException(int pid) {
             super("Process " + pid + " is not found in the container.");
@@ -112,7 +112,7 @@ final class ContainerAttacher {
         return new Debuggers(process, provider.getAvailableDebuggers(project, host, process, new UserDataHolderBase()));
     }
 
-    // Connects Docker servers configured in the IDE (the ones that connect) and finds the running container by its name.
+    // Connects Docker servers configured in the IDE and finds the running container by its name.
     private static Object findContainer(Project project, String containerName, ClassLoader loader) throws Exception {
         var serversManagerClass = loader.loadClass("com.intellij.remoteServer.configuration.RemoteServersManager");
         var serversManager = serversManagerClass.getMethod("getInstance").invoke(null);
@@ -134,7 +134,6 @@ final class ContainerAttacher {
             throw new IllegalStateException("No Docker connection is configured in the IDE.");
         }
 
-        // A connection may fail (e.g., a remote Docker which is not reachable): the container is looked up by the other ones.
         var connected = 0;
         Exception failure = null;
         for (var connection : connections) {
@@ -171,7 +170,7 @@ final class ContainerAttacher {
         throw new IllegalStateException("Container " + containerName + " is not found by the IDE Docker connections.");
     }
 
-    // A public method of the object, callable even if its class is not public (e.g., a private Kotlin class).
+    // Callable even if the class of the object is not public (e.g., a private Kotlin class).
     private static Method method(Object target, String name, Class<?>... parameterTypes) throws NoSuchMethodException {
         var method = target.getClass().getMethod(name, parameterTypes);
         method.setAccessible(true);
@@ -202,7 +201,7 @@ final class ContainerAttacher {
         throw (T) e;
     }
 
-    // The coroutine scope of the attach hosts of a project, cancelled with the project (or the plugin), unlike a global one.
+    // A coroutine scope cancelled with the project, unlike a global one.
     @Service(Service.Level.PROJECT)
     static final class ProjectScope {
         final CoroutineScope scope;

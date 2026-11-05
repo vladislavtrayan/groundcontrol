@@ -32,8 +32,7 @@ internal abstract class TestContainer(string name, IReadOnlyList<(string Source,
         throw new InvalidOperationException($"{path} is not mounted into the tests container {name}.");
     }
 
-    // The host path of a bind mount source as reported by Docker: Docker Desktop on Windows reports Windows paths
-    // as mounted into its virtual machine (/run/desktop/mnt/host/c/..., or /mnt/c/... by its WSL integration).
+    // Docker Desktop on Windows reports bind mount sources as mounted into its virtual machine (/run/desktop/mnt/host/c/..., /mnt/c/... by WSL).
     internal static string ToHostPath(string source, bool windowsHost) =>
         windowsHost && DesktopMount.Match(source) is { Success: true } mount
             ? $"{mount.Groups[1].Value.ToUpperInvariant()}:\\{mount.Groups[2].Value.Replace('/', '\\')}"

@@ -33,7 +33,6 @@ public class TestContainerTests
         Assert.Equal("/src/Tests.cs", container.MapPath(Path.Combine(Project, "Tests.cs")));
     }
 
-    // Docker Desktop on Windows reports bind mount sources as mounted into its virtual machine.
     [Theory]
     [InlineData("/run/desktop/mnt/host/c/Work/project", true, @"C:\Work\project")]
     [InlineData("/run/desktop/mnt/host/c", true, @"C:\")]

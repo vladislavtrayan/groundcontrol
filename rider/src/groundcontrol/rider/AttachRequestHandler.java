@@ -50,7 +50,7 @@ public final class AttachRequestHandler extends HttpRequestHandler {
             return true;
         }
 
-        // Off the I/O thread: finding the project reads the project model, attaching takes long.
+        // Off the I/O thread: attaching takes long.
         request.retain();
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
@@ -65,7 +65,6 @@ public final class AttachRequestHandler extends HttpRequestHandler {
                 Responses.sendPlainText(HttpResponseStatus.OK, context.channel(), request, "Attached");
             } catch (Throwable e) {
                 LOG.warn("Unable to attach to process " + pid + " in container " + container, e);
-                // Reflective calls wrap the failure (InvocationTargetException), reported by its cause.
                 Responses.sendPlainText(HttpResponseStatus.INTERNAL_SERVER_ERROR, context.channel(), request, ExceptionUtil.getRootCause(e).toString());
             } finally {
                 request.release();
@@ -88,9 +87,8 @@ public final class AttachRequestHandler extends HttpRequestHandler {
         }
     }
 
-    // The open project of the tests: the test assembly or the Docker Compose project directory is within its roots (the solution
-    // directory and content roots), or the Docker Compose project directory (one holding a Compose file, so not any ancestor)
-    // contains the solution directory (e.g., the solution within src of the repository).
+    // The open project whose roots contain the test assembly or the Compose project directory, or which lies within the Compose
+    // project directory (one holding a Compose file, so not any ancestor of the solution).
     private static Project findProject(Path repository, Path assembly) {
         var candidates = new ArrayList<Path>();
         if (assembly != null) {

@@ -10,7 +10,6 @@ public class ContainerTestExecutorTests
     public void PassesNoArgumentsByDefault() =>
         Assert.Empty(ContainerTestExecutor.Arguments(TestFrameworkOptions.ForExecution(new TestAssemblyConfiguration())));
 
-    // Options of the local test run are forwarded to the remote one, so runs are reproducible (e.g., by their seed) and stop as asked.
     [Fact]
     public void PassesExecutionOptions()
     {

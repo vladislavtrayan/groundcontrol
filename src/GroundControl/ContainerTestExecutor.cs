@@ -46,9 +46,8 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
         }
     }
 
-    // Reports the pending test cases as failed by the cause and returns their number: test runners count the results only,
-    // so test cases without results are not run silently (e.g., dotnet test succeeds). Messages the remote test process has reported
-    // (the test case and its tests starting) are not repeated.
+    // Reports the pending test cases as failed by the cause (continuing what the remote test process has reported of them) and returns
+    // their number: test runners count the results only, so test cases without results are not run silently (e.g., dotnet test succeeds).
     private static int ReportFailed(IEnumerable<PendingTestCase> pending, Exception cause, IMessageSink executionMessageSink)
     {
         var (exceptionTypes, messages, stackTraces, exceptionParentIndices, failureCause) = ExceptionUtility.ExtractMetadata(cause);
@@ -241,8 +240,7 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
         }
     }
 
-    // The execution options of the local test run as the arguments of the remote one (the ones not set are read from
-    // the runner configuration file next to the test assembly by the remote test process, as locally).
+    // The execution options of the local test run as the arguments of the remote one.
     internal static List<string> Arguments(ITestFrameworkExecutionOptions executionOptions)
     {
         var arguments = new List<string>();
@@ -261,7 +259,7 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
             arguments.AddRange(["-parallelAlgorithm", parallelAlgorithm.ToString().ToLowerInvariant()]);
         }
 
-        // 0 is the default (the number of processors), -1 is unlimited.
+        // 0 is the default, -1 is unlimited.
         if (executionOptions.GetMaxParallelThreads() is { } maxParallelThreads and not 0)
         {
             arguments.AddRange(["-maxThreads", maxParallelThreads < 0 ? "unlimited" : maxParallelThreads.ToString(CultureInfo.InvariantCulture)]);

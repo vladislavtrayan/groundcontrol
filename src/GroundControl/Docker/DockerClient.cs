@@ -79,8 +79,7 @@ internal sealed class DockerClient(string executable, string? context)
         }
         catch (IOException)
         {
-            // The command has exited without reading its input (e.g., the container has not started): reported by its exit code
-            // and its standard error below.
+            // The command has exited without reading its input: reported by its exit code and standard error.
         }
 
         while (await process.StandardOutput.ReadLineAsync(CancellationToken.None) is { } line)

@@ -11,8 +11,7 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
 
     public string Directory => directory;
 
-    // The configured project directory (relative to the directory of the test assembly), otherwise the closest directory
-    // of the test assembly containing a Compose file.
+    // The configured project directory (relative to the test assembly), otherwise the closest directory of the test assembly containing a Compose file.
     public static ComposeProject Find(DockerClient docker, GroundControlOptions options, string assemblyPath)
     {
         var assemblyDirectory = Path.GetDirectoryName(assemblyPath);
@@ -32,8 +31,7 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
             : throw new InvalidOperationException($"Docker Compose file ({string.Join(", ", ComposeFiles)}) is not found in directories of {assemblyPath}.");
     }
 
-    // The container of the configured Service, otherwise one created for the test run on the network of the project,
-    // once the project is ready.
+    // The container of the configured Service, otherwise one created for the test run on the network of the project, once the project is ready.
     public async Task<TestContainer> GetTestContainerAsync(string assemblyPath, CancellationToken cancellationToken)
     {
         var containers = await this.GetContainersAsync(cancellationToken);
@@ -102,7 +100,6 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
         }
     }
 
-    // The containers of the project, including the stopped ones (one-off services).
     private async Task<List<ComposeContainer>> GetContainersAsync(CancellationToken cancellationToken) =>
         (await docker.GetOutputAsync(this.Compose(["ps", "--all", "--format", "json"]), cancellationToken)).SelectMany(ComposeContainer.Parse).ToList();
 

@@ -31,7 +31,7 @@ internal class MessageMapper
         this.requested = testCases.ToDictionary(testCase => testCase.UniqueID);
     }
 
-    // Requested test cases the remote test process has not finished: not run, or run but not finished (e.g., it has crashed running them).
+    // Requested test cases the remote test process has not finished (e.g., it has crashed running them).
     public IEnumerable<PendingTestCase> Pending =>
         this.requested.Values
             .Where(testCase => !this.finished.Contains(testCase.UniqueID))
@@ -39,7 +39,7 @@ internal class MessageMapper
                 ? new PendingTestCase(testCase, true, progress.Tests, progress.RunningTest)
                 : new PendingTestCase(testCase, false, 0, null));
 
-    // Results of the tests reported so far (as counted by the test assembly summary).
+    // Results reported so far, as counted by the test assembly summary.
     public int TestsTotal { get; private set; }
 
     public int TestsFailed { get; private set; }
@@ -159,7 +159,6 @@ internal class MessageMapper
                 match => match.Groups[1].Success ? ((char)Convert.ToInt32(match.Groups[1].Value, 16)).ToString() : match.Value)
             : json;
 
-    // The tests of a test case the remote test process has started: their number, and the one running (not finished), if any.
     private sealed class Progress
     {
         public int Tests { get; set; }
@@ -168,9 +167,7 @@ internal class MessageMapper
     }
 }
 
-// A message of the remote test process mapped to the local test cases: its type and its JSON.
 internal sealed record MappedMessage(string Type, string Json);
 
-// A requested test case the remote test process has not finished: whether it has started it, the number of its tests started
-// (the index of the next one), and the unique ID of its test running (started but not finished), if any.
+// A requested test case not finished: the number of its tests started (the index of the next one) and its running test, if any.
 internal sealed record PendingTestCase(ITestCase TestCase, bool Started, int TestsStarted, string? RunningTest);

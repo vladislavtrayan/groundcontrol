@@ -14,7 +14,6 @@ internal sealed class RiderDebugger : IGroundControlDebugger
     {
         // Attaching deploys the debugger tools into the container first.
         using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-        // The IDE project is found by the Docker Compose project directory or the test assembly (see AttachRequestHandler of the plugin).
         var query = $"repository={Uri.EscapeDataString(target.ProjectDirectory)}&assembly={Uri.EscapeDataString(target.AssemblyPath)}"
             + $"&container={Uri.EscapeDataString(target.ContainerName)}&pid={target.ProcessId}";
         for (var port = FirstPort; port <= LastPort; port++)
@@ -41,7 +40,6 @@ internal sealed class RiderDebugger : IGroundControlDebugger
             }
             catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                // The IDE on the port is attaching (e.g., deploying the debugger tools) but has not done within the timeout.
                 Log($"Debugger has not been attached by Rider (port {port}) within {client.Timeout}; attach manually if it is not.");
                 return false;
             }
