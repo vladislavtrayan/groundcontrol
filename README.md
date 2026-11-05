@@ -35,9 +35,9 @@ All optional, as assembly metadata of the test project (`<AssemblyMetadata Inclu
 | Setting | Default | Description |
 | --- | --- | --- |
 | `Project` | resolved by Docker Compose | Docker Compose project name. |
-| `ProjectDirectory` | closest Compose file | Docker Compose project directory. |
-| `Service` | a container per run | Docker Compose service running test processes, kept running (e.g., to keep debugger tools in it). |
-| `Image` | .NET (or ASP.NET Core) image of the test assembly runtime | Image of the containers created for test runs. |
+| `ProjectDirectory` | closest Compose file | Docker Compose project directory (relative to the directory of the test assembly). |
+| `Service` | a container per run | Docker Compose service running test processes, kept running (e.g., to keep debugger tools in it); its image needs `bash`. |
+| `Image` | .NET (or ASP.NET Core) image of the test assembly runtime | Image of the containers created for test runs; it needs `bash` (e.g., the Debian-based .NET images, not Alpine or chiseled ones). |
 | `Network` | the one most services are on | Network of the containers created for test runs. |
 | `ReadinessTimeout` | 5 minutes | How long to wait for the project to be ready: seconds, or a time span. |
 | `Readiness` | `AllServices` | `AllServices`: every service is healthy (or running without a healthcheck) and one-off services have completed; `None`: no wait. |
@@ -56,6 +56,7 @@ Debug the tests as usual: the test process within the container waits for a debu
 
 - .NET 8 or later, xUnit.net v3 (2.0 or later).
 - Docker CLI on the host, with access to the Docker Compose project.
+- `bash` in the tests container (the test process is run by a bash script): the default .NET images have it.
 
 ## Development
 

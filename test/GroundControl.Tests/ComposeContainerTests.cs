@@ -9,9 +9,9 @@ public class ComposeContainerTests
     public void ParsesLines()
     {
         var container = Assert.Single(ComposeContainer.Parse(
-            """{"ID":"abc","Name":"sample-web-1","State":"running","Health":"healthy","ExitCode":0,"Status":"Up 5 seconds (healthy)","Networks":"sample_default"}"""));
+            """{"ID":"abc","Name":"sample-web-1","Service":"web","State":"running","Health":"healthy","ExitCode":0,"Status":"Up 5 seconds (healthy)","Networks":"sample_default"}"""));
 
-        Assert.Equal(new ComposeContainer("abc", "sample-web-1", "running", "healthy", 0, "Up 5 seconds (healthy)", "sample_default"), container);
+        Assert.Equal(new ComposeContainer("abc", "sample-web-1", "web", "running", "healthy", 0, "Up 5 seconds (healthy)", "sample_default"), container);
     }
 
     [Fact]
@@ -32,7 +32,7 @@ public class ComposeContainerTests
     [InlineData("created", "", 0, false, false)]
     public void ReportsReadiness(string state, string health, int exitCode, bool ready, bool failed)
     {
-        var container = new ComposeContainer("id", "name", state, health, exitCode, string.Empty, string.Empty);
+        var container = new ComposeContainer("id", "name", "service", state, health, exitCode, string.Empty, string.Empty);
 
         Assert.Equal(ready, container.IsReady);
         Assert.Equal(failed, container.HasFailed);

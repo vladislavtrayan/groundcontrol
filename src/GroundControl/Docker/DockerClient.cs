@@ -64,15 +64,23 @@ internal sealed class DockerClient(string executable, string? context)
             }
         }, CancellationToken.None);
 
-        foreach (var value in input)
+        try
         {
-            await process.StandardInput.WriteAsync($"{value}\0");
-        }
+            foreach (var value in input)
+            {
+                await process.StandardInput.WriteAsync($"{value}\0");
+            }
 
-        await process.StandardInput.FlushAsync(CancellationToken.None);
-        if (!keepInputOpen)
+            await process.StandardInput.FlushAsync(CancellationToken.None);
+            if (!keepInputOpen)
+            {
+                process.StandardInput.Close();
+            }
+        }
+        catch (IOException)
         {
-            process.StandardInput.Close();
+            // The command has exited without reading its input (e.g., the container has not started): reported by its exit code
+            // and its standard error below.
         }
 
         while (await process.StandardOutput.ReadLineAsync(CancellationToken.None) is { } line)
@@ -84,7 +92,14 @@ internal sealed class DockerClient(string executable, string? context)
         await process.WaitForExitAsync(CancellationToken.None);
         if (keepInputOpen)
         {
-            process.StandardInput.Close();
+            try
+            {
+                process.StandardInput.Close();
+            }
+            catch (IOException)
+            {
+                // Already closed by the command.
+            }
         }
 
         var error = string.Join(Environment.NewLine, errors.TakeLast(50));

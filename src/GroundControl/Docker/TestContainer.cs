@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace GroundControl.Docker;
 
@@ -31,6 +32,14 @@ internal abstract class TestContainer(string name, IReadOnlyList<(string Source,
         throw new InvalidOperationException($"{path} is not mounted into the tests container {name}.");
     }
 
+    // The host path of a bind mount source as reported by Docker: Docker Desktop on Windows reports Windows paths
+    // as mounted into its virtual machine (/run/desktop/mnt/host/c/..., or /mnt/c/... by its WSL integration).
+    internal static string ToHostPath(string source, bool windowsHost) =>
+        windowsHost && DesktopMount.Match(source) is { Success: true } mount
+            ? $"{mount.Groups[1].Value.ToUpperInvariant()}:\\{mount.Groups[2].Value.Replace('/', '\\')}"
+            : source;
+
+    private static readonly Regex DesktopMount = new("^/(?:run/desktop/mnt/host|mnt)/([A-Za-z])(?:/(.*))?$", RegexOptions.Compiled);
 }
 
 // The container of a Docker Compose service (Service setting), kept running between test runs: processes are run by docker exec.
@@ -44,7 +53,7 @@ internal sealed class ServiceTestContainer(string id, string name, IReadOnlyList
         var output = await docker.GetOutputAsync(["inspect", "--format", "{{json .Mounts}}", id], cancellationToken);
         var mounts = JsonDocument.Parse(string.Concat(output)).RootElement.EnumerateArray()
             .Where(mount => mount.GetProperty("Type").GetString() == "bind")
-            .Select(mount => (mount.GetProperty("Source").GetString()!, mount.GetProperty("Destination").GetString()!))
+            .Select(mount => (ToHostPath(mount.GetProperty("Source").GetString()!, OperatingSystem.IsWindows()), mount.GetProperty("Destination").GetString()!))
             .ToList();
         return new ServiceTestContainer(id, name, mounts);
     }

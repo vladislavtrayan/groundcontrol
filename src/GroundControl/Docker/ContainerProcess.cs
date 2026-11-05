@@ -1,6 +1,6 @@
 namespace GroundControl.Docker;
 
-// A process run within the tests container.
+// A process run within the tests container, by a bash script: the image of the container needs bash (the default .NET images have it).
 internal static class ContainerProcess
 {
     // Runs the assembly by dotnet with the arguments followed by the input arguments, with the input lines in a file

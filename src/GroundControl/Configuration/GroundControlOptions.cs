@@ -16,14 +16,16 @@ public sealed record GroundControlOptions
     // Docker Compose project name; by default, resolved by Docker Compose (COMPOSE_PROJECT_NAME, .env, Compose files).
     public string? Project { get; init; }
 
-    // Docker Compose project directory; by default, the closest directory of the test assembly containing a Compose file.
+    // Docker Compose project directory, relative to the directory of the test assembly;
+    // by default, the closest directory of the test assembly containing a Compose file.
     public string? ProjectDirectory { get; init; }
 
-    // Docker Compose service running test processes (kept running, e.g., to keep debugger tools in it);
-    // by default, a container is created for each test run on the network of the project.
+    // Docker Compose service running test processes (kept running, e.g., to keep debugger tools in it), its image needs bash
+    // (see ContainerProcess); by default, a container is created for each test run on the network of the project.
     public string? Service { get; init; }
 
-    // Image of the containers created for test runs; by default, the .NET (or ASP.NET Core) image of the test assembly runtime.
+    // Image of the containers created for test runs, it needs bash (see ContainerProcess);
+    // by default, the .NET (or ASP.NET Core) image of the test assembly runtime.
     public string? Image { get; init; }
 
     // Network of the containers created for test runs; by default, the one most services of the project are on.
