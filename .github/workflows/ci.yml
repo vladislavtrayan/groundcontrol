@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  # Unit tests and Docker integration tests (Linux runners run Linux containers), and the package.
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Build
+        run: dotnet build GroundControl.slnx --configuration Release
+
+      - name: Test
+        run: dotnet test GroundControl.slnx --configuration Release --no-build --logger trx --results-directory TestResults
+
+      - name: Pack
+        run: dotnet pack src/GroundControl/GroundControl.csproj --configuration Release --no-build --output artifacts
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-linux
+          path: TestResults
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts
+
+  # Unit tests on Windows, the usual host of IDEs (Windows runners run Windows containers, so integration tests are skipped).
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Test
+        run: dotnet test GroundControl.slnx --configuration Release --filter "Category!=Docker" --logger trx --results-directory TestResults
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-windows
+          path: TestResults

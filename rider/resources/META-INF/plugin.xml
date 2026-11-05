@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>groundcontrol.rider</id>
     <name>GroundControl</name>
-    <vendor>ADBRO</vendor>
+    <vendor>Vladislav Trayan</vendor>
     <version>0.1.0</version>
     <description>Attaches the debugger to tests run within a container by GroundControl.</description>
     <idea-version since-build="262"/>

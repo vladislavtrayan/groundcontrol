@@ -11,7 +11,12 @@
     <PropertyGroup>
         <PackageId>GroundControl</PackageId>
         <Version>0.1.0</Version>
-        <Authors>ADBRO</Authors>
+        <Authors>Vladislav Trayan</Authors>
+        <Copyright>Copyright (c) 2026 Vladislav Trayan</Copyright>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageProjectUrl>https://github.com/vladislavtrayan/groundcontrol</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/vladislavtrayan/groundcontrol</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
         <Description>Runs xUnit.net v3 tests within a container of a Docker Compose project wherever they are started from (IDE, command line, pipeline), with the IDE debugger attached.</Description>
         <PackageTags>xunit;docker;compose;testing;integration-tests</PackageTags>
         <PackageReadmeFile>README.md</PackageReadmeFile>
