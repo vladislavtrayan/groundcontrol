@@ -13,6 +13,7 @@ internal class GroundControlMessageMapper
     private static readonly JsonSerializerOptions JsonOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private readonly string assemblyPath;
+    private readonly string? assemblyUniqueId;
     private readonly string? configFilePath;
     private readonly Dictionary<string, ITestCase> requested;
     private readonly HashSet<string> started = [];
@@ -20,6 +21,7 @@ internal class GroundControlMessageMapper
     public GroundControlMessageMapper(string assemblyPath, IReadOnlyCollection<ITestCase> testCases)
     {
         this.assemblyPath = assemblyPath;
+        this.assemblyUniqueId = testCases.FirstOrDefault()?.TestCollection.TestAssembly.UniqueID;
         this.configFilePath = testCases.FirstOrDefault()?.TestCollection.TestAssembly.ConfigFilePath;
         this.requested = testCases.ToDictionary(testCase => testCase.UniqueID);
     }
@@ -63,6 +65,13 @@ internal class GroundControlMessageMapper
             {
                 this.started.Add(testCase);
             }
+        }
+
+        // The remote test process reports the test assembly by its own unique ID (computed from its path within the container),
+        // while the test cases refer to the local one; test runners (e.g., the VSTest adapter) look up test metadata by it.
+        if (this.assemblyUniqueId is not null && message["AssemblyUniqueID"] is not null)
+        {
+            message["AssemblyUniqueID"] = this.assemblyUniqueId;
         }
 
         if (type == "test-assembly-starting")
