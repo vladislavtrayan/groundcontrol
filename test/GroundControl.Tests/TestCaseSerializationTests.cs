@@ -5,7 +5,7 @@ using Xunit.v3;
 
 namespace GroundControl.Tests;
 
-public class GroundControlTestCasesTests
+public class TestCaseSerializationTests
 {
     private const string RemotePath = "/workspace/bin/Debug/net8.0/GroundControl.Tests.dll";
 
@@ -15,7 +15,7 @@ public class GroundControlTestCasesTests
         var testCase = (await TestCases.DiscoverAsync(typeof(DiscoveredTests), preEnumerateTheories: true))[0];
         var local = SerializationHelper.Instance.Serialize(testCase)!;
 
-        var remote = GroundControlTestCases.Serialize(testCase, RemotePath);
+        var remote = TestCaseSerialization.Serialize(testCase, RemotePath);
 
         Assert.Equal([RemotePath], Members(remote, "ap"));
         Assert.Equal([typeof(DiscoveredTests).Assembly.Location], Members(local, "ap"));
@@ -33,9 +33,9 @@ public class GroundControlTestCasesTests
         try
         {
             // The local path, so the assembly is loaded by deserialization.
-            File.WriteAllLines(path, testCases.Select(testCase => GroundControlTestCases.Serialize(testCase, typeof(DiscoveredTests).Assembly.Location)));
+            File.WriteAllLines(path, testCases.Select(testCase => TestCaseSerialization.Serialize(testCase, typeof(DiscoveredTests).Assembly.Location)));
 
-            var loaded = GroundControlTestCases.Load(path);
+            var loaded = TestCaseSerialization.Load(path);
 
             Assert.Equal(testCases.Select(testCase => testCase.UniqueID), loaded.Select(testCase => testCase.UniqueID));
             Assert.Equal(testCases.Select(testCase => testCase.TestCaseDisplayName), loaded.Select(testCase => testCase.TestCaseDisplayName));
@@ -51,7 +51,7 @@ public class GroundControlTestCasesTests
 
     [Fact]
     public void KeepsOtherSerializations() =>
-        Assert.Equal("4:dGV4dA==", GroundControlTestCases.ReplaceAssemblyPath("4:dGV4dA==", RemotePath));
+        Assert.Equal("4:dGV4dA==", TestCaseSerialization.ReplaceAssemblyPath("4:dGV4dA==", RemotePath));
 
     // Values of the members of the given key, within the serialized object and the objects it contains.
     private static List<string> Members(string serialization, string key)

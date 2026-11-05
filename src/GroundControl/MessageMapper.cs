@@ -7,8 +7,8 @@ using Xunit.Sdk;
 namespace GroundControl;
 
 // Maps messages of the remote test process to the local test cases. The remote test process runs the local test cases as they are
-// (see GroundControlTestCases), so it reports their unique IDs; only the test assembly path differs.
-internal class GroundControlMessageMapper
+// (see TestCaseSerialization), so it reports their unique IDs; only the test assembly path differs.
+internal class MessageMapper
 {
     // xUnit.net JSON deserializer does not support escaped characters (e.g., '+' as '+').
     private static readonly JsonSerializerOptions JsonOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -22,7 +22,7 @@ internal class GroundControlMessageMapper
     private readonly Dictionary<string, ITestCase> requested;
     private readonly HashSet<string> started = [];
 
-    public GroundControlMessageMapper(string assemblyPath, IReadOnlyCollection<ITestCase> testCases)
+    public MessageMapper(string assemblyPath, IReadOnlyCollection<ITestCase> testCases)
     {
         this.assemblyPath = assemblyPath;
         this.assemblyUniqueId = testCases.FirstOrDefault()?.TestCollection.TestAssembly.UniqueID;

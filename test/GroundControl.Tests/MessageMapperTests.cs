@@ -4,7 +4,7 @@ using Xunit.Sdk;
 
 namespace GroundControl.Tests;
 
-public class GroundControlMessageMapperTests
+public class MessageMapperTests
 {
     private const string LocalPath = @"C:\Work\Tests\bin\Tests.dll";
     private const string RemoteAssembly = "remote-assembly";
@@ -97,13 +97,13 @@ public class GroundControlMessageMapperTests
         Assert.Equal(testCases.Skip(1).Select(testCase => testCase.UniqueID), mapper.NotStarted.Select(testCase => testCase.UniqueID));
     }
 
-    private static async Task<GroundControlMessageMapper> CreateAsync() => (await CreateWithTestCasesAsync()).Mapper;
+    private static async Task<MessageMapper> CreateAsync() => (await CreateWithTestCasesAsync()).Mapper;
 
-    private static async Task<(GroundControlMessageMapper Mapper, IReadOnlyList<ITestCase> TestCases)> CreateWithTestCasesAsync()
+    private static async Task<(MessageMapper Mapper, IReadOnlyList<ITestCase> TestCases)> CreateWithTestCasesAsync()
     {
         var testCases = await TestCases.DiscoverAsync(typeof(DiscoveredTests), preEnumerateTheories: true);
         Assert.True(testCases.Count > 1);
-        return (new GroundControlMessageMapper(LocalPath, testCases.ToList()), testCases);
+        return (new MessageMapper(LocalPath, testCases.ToList()), testCases);
     }
 
     private static string Message(string type, string testCase) =>

@@ -10,7 +10,7 @@ using Xunit.v3;
 namespace GroundControl;
 
 // Runs the test cases by the same test assembly within the tests container and reports its results as of the local test cases.
-internal class GroundControlTestExecutor(Assembly assembly) : ITestFrameworkExecutor
+internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
 {
     public async ValueTask RunTestCases(
         IReadOnlyCollection<ITestCase> testCases,
@@ -19,7 +19,7 @@ internal class GroundControlTestExecutor(Assembly assembly) : ITestFrameworkExec
         CancellationToken? cancellationToken)
     {
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken ?? CancellationToken.None);
-        var mapper = new GroundControlMessageMapper(assembly.Location, testCases);
+        var mapper = new MessageMapper(assembly.Location, testCases);
         try
         {
             await this.RunAsync(testCases, mapper, executionMessageSink, executionOptions, cancellation);
@@ -145,7 +145,7 @@ internal class GroundControlTestExecutor(Assembly assembly) : ITestFrameworkExec
 
     private async Task RunAsync(
         IReadOnlyCollection<ITestCase> testCases,
-        GroundControlMessageMapper mapper,
+        MessageMapper mapper,
         IMessageSink executionMessageSink,
         ITestFrameworkExecutionOptions executionOptions,
         CancellationTokenSource cancellation)
@@ -178,10 +178,10 @@ internal class GroundControlTestExecutor(Assembly assembly) : ITestFrameworkExec
             arguments.Add("-waitForDebugger");
         }
 
-        // The local test cases are run as they are (see GroundControlTestCases); the remote test process discovers only their methods,
+        // The local test cases are run as they are (see TestCaseSerialization); the remote test process discovers only their methods,
         // as test cases are run once discovered.
         var remoteAssemblyPath = container.MapPath(assembly.Location);
-        var serializations = testCases.Select(testCase => GroundControlTestCases.Serialize(testCase, remoteAssemblyPath)).ToList();
+        var serializations = testCases.Select(testCase => TestCaseSerialization.Serialize(testCase, remoteAssemblyPath)).ToList();
         var filterArguments = testCases
             .Where(testCase => testCase.TestClassName is not null && testCase.TestMethodName is not null)
             .Select(testCase => $"{testCase.TestClassName}.{testCase.TestMethodName}")
@@ -189,23 +189,23 @@ internal class GroundControlTestExecutor(Assembly assembly) : ITestFrameworkExec
             .SelectMany(method => new[] { "-method", method })
             .ToList();
 
-        var debuggers = Debugger.IsAttached ? GroundControlDebuggers.Create(options) : [];
+        var debuggers = Debugger.IsAttached ? Debuggers.Create(options) : [];
         var finished = false;
         var output = new Queue<string>();
-        var errors = await GroundControlProcess.RunAsync(
+        var errors = await ContainerProcess.RunAsync(
             docker,
             container,
             remoteAssemblyPath,
             arguments,
             filterArguments,
-            GroundControlTestCases.FileVariable,
+            TestCaseSerialization.FileVariable,
             serializations,
             processId =>
             {
                 if (debuggers.Count > 0)
                 {
                     var target = new GroundControlDebugTarget(container.Id, container.Name, processId, project.Directory);
-                    _ = GroundControlDebuggers.AttachAsync(debuggers, target, cancellation.Token);
+                    _ = Debuggers.AttachAsync(debuggers, target, cancellation.Token);
                 }
             },
             line =>

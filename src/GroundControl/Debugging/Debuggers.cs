@@ -4,7 +4,7 @@ using GroundControl.Configuration;
 namespace GroundControl.Debugging;
 
 // Debugger integrations, tried in order until one attaches the debugger; attaching manually is the last resort.
-internal static class GroundControlDebuggers
+internal static class Debuggers
 {
     // The Debugger setting: Rider, Manual, or the assembly-qualified name of an IGroundControlDebugger implementation;
     // by default, the built-in integrations.

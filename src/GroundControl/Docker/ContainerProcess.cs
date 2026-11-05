@@ -1,7 +1,7 @@
 namespace GroundControl.Docker;
 
 // A process run within the tests container.
-internal static class GroundControlProcess
+internal static class ContainerProcess
 {
     // Runs the assembly by dotnet with the arguments followed by the input arguments, with the input lines in a file
     // (its path in the given environment variable), reports the process ID and its output lines, and returns the end of its standard error.

@@ -17,11 +17,11 @@ public class GroundControlTestFramework : XunitTestFramework
     {
     }
 
-    // The test process within the tests container is given the local test cases to run (see GroundControlTestCases).
+    // The test process within the tests container is given the local test cases to run (see TestCaseSerialization).
     protected override ITestFrameworkExecutor CreateExecutor(Assembly assembly) =>
-        Environment.GetEnvironmentVariable(GroundControlTestCases.FileVariable) is { Length: > 0 } testCasesPath
+        Environment.GetEnvironmentVariable(TestCaseSerialization.FileVariable) is { Length: > 0 } testCasesPath
             ? new LocalTestCasesExecutor(base.CreateExecutor(assembly), testCasesPath)
-            : new GroundControlTestExecutor(assembly);
+            : new ContainerTestExecutor(assembly);
 
     // Runs the local test cases rather than the ones discovered by the remote test process.
     private sealed class LocalTestCasesExecutor(ITestFrameworkExecutor executor, string testCasesPath) : ITestFrameworkExecutor, IAsyncDisposable
@@ -31,7 +31,7 @@ public class GroundControlTestFramework : XunitTestFramework
             IMessageSink executionMessageSink,
             ITestFrameworkExecutionOptions executionOptions,
             CancellationToken? cancellationToken) =>
-            executor.RunTestCases(GroundControlTestCases.Load(testCasesPath), executionMessageSink, executionOptions, cancellationToken);
+            executor.RunTestCases(TestCaseSerialization.Load(testCasesPath), executionMessageSink, executionOptions, cancellationToken);
 
         public ValueTask DisposeAsync() => executor is IAsyncDisposable disposable ? disposable.DisposeAsync() : ValueTask.CompletedTask;
     }

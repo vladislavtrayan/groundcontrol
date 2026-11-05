@@ -7,7 +7,7 @@ namespace GroundControl.Configuration;
 // Settings of remote test runs, all optional: assembly metadata of the test assembly, e.g.,
 // <AssemblyMetadata Include="GroundControl.Service" Value="tests" /> in the test project, overridden by environment variables,
 // e.g., GROUNDCONTROL_SERVICE=tests (GROUNDCONTROL_ followed by the setting name in upper snake case).
-// GROUNDCONTROL_TEST_CASES is not a setting: it is set by the remote test process (see GroundControlTestCases).
+// GROUNDCONTROL_TEST_CASES is not a setting: it is set by the remote test process (see TestCaseSerialization).
 public sealed record GroundControlOptions
 {
     private const string MetadataPrefix = "GroundControl.";
@@ -40,7 +40,7 @@ public sealed record GroundControlOptions
     // Docker context; by default, the current one.
     public string? DockerContext { get; init; }
 
-    // Debugger integration (see GroundControlDebuggers).
+    // Debugger integration (see Debuggers).
     public string? Debugger { get; init; }
 
     public static GroundControlOptions Load(Assembly assembly) =>

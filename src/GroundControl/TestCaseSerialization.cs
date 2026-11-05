@@ -7,7 +7,7 @@ namespace GroundControl;
 // The local test cases run by the remote test process as they are: their serializations keep the unique IDs of the local test cases
 // (and their theory data rows), so the remote test process reports them as of the local test cases. Serializations contain
 // the path of the test assembly, which is replaced by its path within the tests container.
-internal static class GroundControlTestCases
+internal static class TestCaseSerialization
 {
     // File of the serializations of the test cases (a line each) within the tests container.
     internal const string FileVariable = "GROUNDCONTROL_TEST_CASES";
