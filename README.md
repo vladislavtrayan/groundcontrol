@@ -11,7 +11,7 @@ Reference the package and declare the test framework in the test project:
 
 ```xml
 <ItemGroup>
-    <PackageReference Include="GroundControl" Version="0.1.0" />
+    <PackageReference Include="GroundControl" Version="0.2.0" />
 </ItemGroup>
 
 <ItemGroup>
@@ -55,7 +55,7 @@ Debug the tests as usual: the test process in the container waits for a debugger
 
 `dotnet test` runs the unit tests and, when Docker is available, the integration tests (trait `Category=Docker`), which run the sample project in `test/GroundControl.Tests.Sample` through GroundControl against its Compose project. `rider/build.ps1` builds the Rider plugin and installs it into the local Rider.
 
-Pushing a version tag such as `0.1.0` builds the package and the plugin, publishes the package to nuget.org and creates the GitHub release with both.
+Pushing a version tag such as `0.2.0` builds the package and the plugin, publishes the package to nuget.org and creates the GitHub release with both.
 
 ## License
 
