@@ -8,5 +8,6 @@ public interface IGroundControlDebugger
     Task<bool> AttachAsync(GroundControlDebugTarget target, CancellationToken cancellationToken);
 }
 
-// The test process to attach the debugger to, and the Docker Compose project directory of the tests (e.g., to find the IDE project).
-public sealed record GroundControlDebugTarget(string ContainerId, string ContainerName, int ProcessId, string ProjectDirectory);
+// The test process to attach the debugger to, with the Docker Compose project directory of the tests and the path of the test assembly
+// (e.g., to find the IDE project).
+public sealed record GroundControlDebugTarget(string ContainerId, string ContainerName, int ProcessId, string ProjectDirectory, string AssemblyPath);

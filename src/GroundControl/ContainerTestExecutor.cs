@@ -199,7 +199,7 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
             {
                 if (debuggers.Count > 0)
                 {
-                    var target = new GroundControlDebugTarget(container.Id, container.Name, processId, project.Directory);
+                    var target = new GroundControlDebugTarget(container.Id, container.Name, processId, project.Directory, assembly.Location);
                     _ = Debuggers.AttachAsync(debuggers, target, cancellation.Token);
                 }
             },

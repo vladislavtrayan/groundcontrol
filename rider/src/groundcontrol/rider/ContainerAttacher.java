@@ -2,6 +2,7 @@ package groundcontrol.rider;
 
 import com.intellij.execution.process.ProcessInfo;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.extensions.ExtensionPointName;
 import com.intellij.openapi.progress.EmptyProgressIndicator;
@@ -15,7 +16,6 @@ import kotlin.coroutines.Continuation;
 import kotlin.coroutines.EmptyCoroutineContext;
 import kotlinx.coroutines.BuildersKt;
 import kotlinx.coroutines.CoroutineScope;
-import kotlinx.coroutines.GlobalScope;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -49,14 +49,16 @@ final class ContainerAttacher {
         var hostClass = loader.loadClass(ATTACH + "attachHosts.RiderDockerContainerAttachHost");
         var host = (XAttachHost) hostClass
             .getConstructor(loader.loadClass("com.intellij.docker.runtimes.DockerApplicationRuntime"), CoroutineScope.class, Project.class)
-            .newInstance(container, GlobalScope.INSTANCE, project);
+            .newInstance(container, project.getService(ProjectScope.class).scope, project);
 
         // Processes are listed by the debugger tools, which are deployed into the container on the first attach.
         Debuggers debuggers;
         try {
             debuggers = findDebuggers(project, provider, host, pid);
+        } catch (ProcessNotFoundException e) {
+            throw e;
         } catch (Exception e) {
-            LOG.info("Unable to find the process in container " + containerName + ": " + e.getMessage());
+            LOG.info("Unable to list the processes of container " + containerName + ": " + e.getMessage());
             debuggers = null;
         }
 
@@ -92,29 +94,37 @@ final class ContainerAttacher {
     private record Debuggers(ProcessInfo process, List<? extends XAttachDebugger> debuggers) {
     }
 
+    // The process is not among the ones listed (the debugger tools are deployed), so deploying them does not help.
+    private static final class ProcessNotFoundException extends IllegalStateException {
+        ProcessNotFoundException(int pid) {
+            super("Process " + pid + " is not found in the container.");
+        }
+    }
+
     private static Debuggers findDebuggers(Project project, XAttachDebuggerProvider provider, XAttachHost host, int pid) throws Exception {
-        var getProcessList = host.getClass().getMethod("getProcessListAsync", Continuation.class);
+        var getProcessList = method(host, "getProcessListAsync", Continuation.class);
         @SuppressWarnings("unchecked")
         var processes = (List<ProcessInfo>) await(continuation -> getProcessList.invoke(host, continuation));
         var process = processes.stream()
             .filter(info -> info.getPid() == pid)
             .findFirst()
-            .orElseThrow(() -> new IllegalStateException("Process " + pid + " is not found in the container."));
+            .orElseThrow(() -> new ProcessNotFoundException(pid));
         return new Debuggers(process, provider.getAvailableDebuggers(project, host, process, new UserDataHolderBase()));
     }
 
-    // Connects Docker servers configured in the IDE and finds the running container by its name.
+    // Connects Docker servers configured in the IDE (the ones that connect) and finds the running container by its name.
     private static Object findContainer(Project project, String containerName, ClassLoader loader) throws Exception {
         var serversManagerClass = loader.loadClass("com.intellij.remoteServer.configuration.RemoteServersManager");
         var serversManager = serversManagerClass.getMethod("getInstance").invoke(null);
         var runtimesManagerClass = loader.loadClass("com.intellij.docker.DockerServerRuntimesManager");
         var runtimesManager = runtimesManagerClass.getMethod("getInstance", Project.class).invoke(null, project);
         var remoteServerClass = loader.loadClass("com.intellij.remoteServer.configuration.RemoteServer");
+        var getType = remoteServerClass.getMethod("getType");
         var getOrCreateConnection = runtimesManagerClass.getMethod("getOrCreateConnection", remoteServerClass);
 
         var connections = new ArrayList<CompletableFuture<?>>();
         for (var server : (Collection<?>) serversManagerClass.getMethod("getServers").invoke(serversManager)) {
-            var type = server.getClass().getMethod("getType").invoke(server);
+            var type = getType.invoke(server);
             if (type.getClass().getName().contains("Docker")) {
                 connections.add((CompletableFuture<?>) getOrCreateConnection.invoke(runtimesManager, server));
             }
@@ -124,8 +134,21 @@ final class ContainerAttacher {
             throw new IllegalStateException("No Docker connection is configured in the IDE.");
         }
 
+        // A connection may fail (e.g., a remote Docker which is not reachable): the container is looked up by the other ones.
+        var connected = 0;
+        Exception failure = null;
         for (var connection : connections) {
-            connection.get(30, TimeUnit.SECONDS);
+            try {
+                connection.get(30, TimeUnit.SECONDS);
+                connected++;
+            } catch (Exception e) {
+                LOG.info("Unable to connect a Docker server configured in the IDE: " + e.getMessage());
+                failure = e;
+            }
+        }
+
+        if (connected == 0) {
+            throw new IllegalStateException("No Docker connection configured in the IDE is connected.", failure);
         }
 
         // Containers are loaded asynchronously after connecting.
@@ -133,9 +156,9 @@ final class ContainerAttacher {
         var getConnectedManagers = runtimesManagerClass.getMethod("getConnectedManagers", Project.class);
         while (System.nanoTime() < deadline) {
             for (var manager : (Collection<?>) getConnectedManagers.invoke(null, project)) {
-                var containers = (Map<?, ?>) manager.getClass().getMethod("getContainers").invoke(manager);
+                var containers = (Map<?, ?>) method(manager, "getContainers").invoke(manager);
                 for (var container : containers.values()) {
-                    var name = (String) container.getClass().getMethod("getContainerName").invoke(container);
+                    var name = (String) method(container, "getContainerName").invoke(container);
                     if (name != null && name.replaceFirst("^/", "").equals(containerName)) {
                         return container;
                     }
@@ -146,6 +169,13 @@ final class ContainerAttacher {
         }
 
         throw new IllegalStateException("Container " + containerName + " is not found by the IDE Docker connections.");
+    }
+
+    // A public method of the object, callable even if its class is not public (e.g., a private Kotlin class).
+    private static Method method(Object target, String name, Class<?>... parameterTypes) throws NoSuchMethodException {
+        var method = target.getClass().getMethod(name, parameterTypes);
+        method.setAccessible(true);
+        return method;
     }
 
     @FunctionalInterface
@@ -170,5 +200,15 @@ final class ContainerAttacher {
     @SuppressWarnings("unchecked")
     private static <T extends Throwable> RuntimeException sneaky(Throwable e) throws T {
         throw (T) e;
+    }
+
+    // The coroutine scope of the attach hosts of a project, cancelled with the project (or the plugin), unlike a global one.
+    @Service(Service.Level.PROJECT)
+    static final class ProjectScope {
+        final CoroutineScope scope;
+
+        ProjectScope(Project project, CoroutineScope scope) {
+            this.scope = scope;
+        }
     }
 }
