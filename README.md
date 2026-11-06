@@ -3,7 +3,7 @@
 
 # GroundControl
 
-Runs xUnit.net v3 tests inside a container of your Docker Compose project, whether started from an IDE, `dotnet test` or a pipeline. Tests reach services by their Compose names, as if they were a service themselves, while the runner, the results and the debugger stay on the host.
+Runs xUnit.net v3 tests inside a container of your Docker Compose project, whether started from an IDE, `dotnet test` or a pipeline. Tests reach services by their Compose names, and services reach the tests by name, while the runner, the results and the debugger stay on the host.
 
 ## Usage
 
@@ -28,7 +28,9 @@ Requirements: .NET 8 or later, xUnit.net v3 2.0 or later, and the Docker CLI wit
 
 ## How it works
 
-For each test run, GroundControl starts a container on the project network with the project directory mounted read-only, and runs the same test assembly in it with the test cases the runner asked for. Results come back as those of the local test cases, so IDEs and `dotnet test` work as usual. The container is removed when the run ends.
+GroundControl runs the same test assembly inside the project with the test cases the runner asked for, and reports the results as those of the local test cases, so IDEs and `dotnet test` work as usual.
+
+The tests run in a container named `groundcontrol` on the project network, which GroundControl creates on the first run and keeps running: every run of every test assembly executes in it, and the services of the project reach the tests by that name (e.g., a web server hosted by a test fixture), which the tests find in the `GROUNDCONTROL_CONTAINER` environment variable. The container runs the .NET image of the test runtime with the project directory mounted read-only. It is recreated when the image or the project directory changes, and removed by `docker rm -f groundcontrol` (e.g., to pick up a newer image); until then, `docker compose down` leaves the project network to it.
 
 ## Settings
 
@@ -38,6 +40,7 @@ Optional, as assembly metadata (`<AssemblyMetadata Include="GroundControl.Networ
 | --- | --- | --- |
 | `Project` | resolved by Compose | Compose project name. |
 | `ProjectDirectory` | closest Compose file | Compose project directory, relative to the test assembly. |
+| `Container` | `groundcontrol` | Name of the tests container, which services reach the tests by. |
 | `Image` | .NET or ASP.NET Core image of the test runtime | Image of the tests container; it needs `bash`, as the default .NET images have (Alpine and chiseled ones do not). |
 | `Network` | the one most services are on | Network of the tests container. |
 | `ReadinessTimeout` | 5 minutes | How long to wait for every service to be healthy (or running, without a healthcheck) and one-off services to complete, in seconds or as a time span; `0` to not wait. |
@@ -48,7 +51,7 @@ Optional, as assembly metadata (`<AssemblyMetadata Include="GroundControl.Networ
 
 Debug the tests as usual: the test process in the container waits for a debugger, and the IDE is asked to attach.
 
-- **Rider**: install `groundcontrol-rider-<version>.jar` from the [releases](https://github.com/vladislavtrayan/groundcontrol/releases) by *Settings → Plugins → ⚙ → Install Plugin from Disk* and restart Rider. Rider deploys its debugger tools into the container on the first attach; they are kept in the `groundcontrol-debugger-tools` Docker volume for later runs (remove it if attaching fails after a Rider upgrade).
+- **Rider**: install `groundcontrol-rider-<version>.jar` from the [releases](https://github.com/vladislavtrayan/groundcontrol/releases) by *Settings → Plugins → ⚙ → Install Plugin from Disk* and restart Rider. Rider deploys its debugger tools into the container on the first attach; they are kept in the `groundcontrol-debugger-tools` Docker volume across recreations of the container (remove it if attaching fails after a Rider upgrade).
 - **Other IDEs**: attach to the process in the container by hand; the run logs the container and process ID.
 
 ## Development

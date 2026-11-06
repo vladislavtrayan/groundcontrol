@@ -31,7 +31,7 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
             : throw new InvalidOperationException($"Docker Compose file ({string.Join(", ", ComposeFiles)}) is not found in directories of {assemblyPath}.");
     }
 
-    // A container for the test run on the network of the project (the one most services are on, the default network of the project),
+    // The tests container, started on the network of the project (the one most services are on, the default network of the project)
     // once the project is ready.
     public async Task<TestContainer> GetTestContainerAsync(string assemblyPath, CancellationToken cancellationToken)
     {
@@ -46,7 +46,10 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
                 .FirstOrDefault()
             ?? throw new InvalidOperationException($"Docker Compose project in {directory} is not running, start it: docker compose up --detach --build");
         await this.WaitUntilReadyAsync(containers, cancellationToken);
-        return new TestContainer(options.Image ?? TestContainer.GetImage(assemblyPath), network, directory);
+
+        var tests = new TestContainer(options.Container, options.Image ?? TestContainer.GetImage(assemblyPath), network, directory);
+        await tests.StartAsync(docker, cancellationToken);
+        return tests;
     }
 
     // Waits until the services of the project are healthy and its one-off services (e.g., migrations) have completed,

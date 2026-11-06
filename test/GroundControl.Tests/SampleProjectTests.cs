@@ -7,7 +7,7 @@ namespace GroundControl.Tests;
 public class SampleProjectTests(SampleProject sample) : IClassFixture<SampleProject>
 {
     // Tests of GroundControl.Tests.Sample run by default (its explicit test is not).
-    private const int Tests = 8;
+    private const int Tests = 9;
 
     [Theory]
     [InlineData(false)]
@@ -22,6 +22,22 @@ public class SampleProjectTests(SampleProject sample) : IClassFixture<SampleProj
         Assert.Empty(run.Of("test-failed"));
         var finished = Assert.Single(run.Of("test-assembly-finished"));
         Assert.Equal(Tests, finished.GetProperty("TestsTotal").GetInt32() - finished.GetProperty("TestsNotRun").GetInt32());
+    }
+
+    // The tests container is kept for the runs, on the network of the project, where the services reach it by its name.
+    [Fact]
+    public async Task KeepsContainerReachedByName()
+    {
+        const string test = "GroundControl.Tests.Sample.NetworkTests.RunsWithinContainer";
+
+        Assert.Equal(0, (await sample.RunAsync(["-method", test])).ExitCode);
+        var container = await sample.DockerAsync("inspect", "--format", "{{.Id}} {{.State.Running}}", "groundcontrol");
+        Assert.Equal(0, (await sample.RunAsync(["-method", test])).ExitCode);
+
+        Assert.Equal(container.Output, (await sample.DockerAsync("inspect", "--format", "{{.Id}} {{.State.Running}}", "groundcontrol")).Output);
+        Assert.EndsWith(" true", Assert.Single(container.Output));
+        var resolution = await sample.DockerAsync("exec", "groundcontrol-sample-web-1", "nslookup", "groundcontrol");
+        Assert.True(resolution.ExitCode == 0, $"groundcontrol is not resolved by the web service:{Environment.NewLine}{resolution.Error}");
     }
 
     [Fact]

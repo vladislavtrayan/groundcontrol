@@ -20,10 +20,14 @@ public sealed record GroundControlOptions
     // containing a Compose file.
     public string? ProjectDirectory { get; init; }
 
-    // Image of the tests containers; by default, the .NET (or ASP.NET Core) image of the test assembly runtime.
+    // Name of the tests container (kept running for the test runs of every test assembly), which services reach the tests by;
+    // the tests are given it in GROUNDCONTROL_CONTAINER.
+    public string Container { get; init; } = "groundcontrol";
+
+    // Image of the tests container; by default, the .NET (or ASP.NET Core) image of the test assembly runtime.
     public string? Image { get; init; }
 
-    // Network of the tests containers; by default, the one most services of the project are on.
+    // Network of the tests container; by default, the one most services of the project are on.
     public string? Network { get; init; }
 
     // How long to wait for the project to be ready (every service healthy, or running if it has no healthcheck, and one-off services,
@@ -59,6 +63,7 @@ public sealed record GroundControlOptions
         {
             Project = Get(nameof(Project)),
             ProjectDirectory = Get(nameof(ProjectDirectory)),
+            Container = Get(nameof(Container)) ?? defaults.Container,
             Image = Get(nameof(Image)),
             Network = Get(nameof(Network)),
             ReadinessTimeout = Get(nameof(ReadinessTimeout)) is { } timeout

@@ -17,8 +17,8 @@ internal static class ContainerProcess
         CancellationToken cancellationToken)
     {
         // The input lines are passed by the standard input (null-separated, ending with an empty value). The standard input is kept open
-        // while the process runs: once it is closed (e.g., the test process is killed), the process is killed, so the container does not
-        // outlive the run (background commands read /dev/null unless redirected, so the standard input is kept as descriptor 3).
+        // while the process runs: once it is closed (e.g., the test process is killed), the process is killed, so it does not outlive
+        // the run (background commands read /dev/null unless redirected, so the standard input is kept as descriptor 3).
         // The process ID is reported first, to attach the debugger.
         var script =
             $$"""
@@ -40,10 +40,15 @@ internal static class ContainerProcess
             "bash", "-c", script.ReplaceLineEndings("\n"), "bash", assemblyPath, .. arguments,
         ];
 
-        await using var registration = cancellationToken.Register(
-            () => _ = docker.RunAsync(container.Stop(), [], _ => { }, CancellationToken.None, throwOnError: false));
+        var processId = (int?)null;
+        await using var registration = cancellationToken.Register(() =>
+        {
+            if (container.Stop(processId) is { } stop)
+            {
+                _ = docker.RunAsync(stop, [], _ => { }, CancellationToken.None, throwOnError: false);
+            }
+        });
 
-        var started = false;
         return await docker.RunAsync(
             command,
             [.. inputLines, string.Empty],
@@ -51,10 +56,10 @@ internal static class ContainerProcess
             cancellationToken,
             line =>
             {
-                if (!started && int.TryParse(line, out var processId))
+                if (processId is null && int.TryParse(line, out var remoteProcessId))
                 {
-                    started = true;
-                    onStarted(processId);
+                    processId = remoteProcessId;
+                    onStarted(remoteProcessId);
                     return true;
                 }
 

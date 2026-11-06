@@ -5,7 +5,7 @@ using Xunit;
 
 namespace GroundControl.Tests;
 
-// The Docker Compose project of GroundControl.Tests.Sample, started for the tests and removed afterwards.
+// The Docker Compose project of GroundControl.Tests.Sample, started for the tests and removed afterwards (with the tests container).
 public sealed class SampleProject : IAsyncLifetime
 {
     private const string Name = "GroundControl.Tests.Sample";
@@ -39,6 +39,7 @@ public sealed class SampleProject : IAsyncLifetime
     {
         if (this.Available)
         {
+            await RunAsync("docker", ["rm", "--force", "groundcontrol"], this.directory);
             await RunAsync("docker", ["compose", "down"], this.directory);
         }
     }
@@ -69,6 +70,9 @@ public sealed class SampleProject : IAsyncLifetime
 
         return new SampleRun(result.ExitCode, messages);
     }
+
+    // Runs a Docker command and returns its exit code and output lines.
+    public Task<(int ExitCode, List<string> Output, string Error)> DockerAsync(params string[] arguments) => RunAsync("docker", arguments, this.directory);
 
     private static async Task<(int ExitCode, List<string> Output, string Error)> RunAsync(
         string executable,
