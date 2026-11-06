@@ -51,7 +51,7 @@ public class ComposeContainerTests
         };
         if (declared)
         {
-            labels[ComposeContainer.ConfigHashLabel] = "4f2b";
+            labels[ComposeLabels.ConfigHash] = "4f2b";
         }
 
         var container = ComposeContainer.From(

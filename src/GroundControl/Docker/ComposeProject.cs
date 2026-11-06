@@ -1,4 +1,3 @@
-using Docker.DotNet.Models;
 using GroundControl.Configuration;
 
 namespace GroundControl.Docker;
@@ -38,7 +37,7 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
 
     /// <summary>
     /// The tests container, once the project is ready: the one of the tests service if the project declares it (checked to run the tests),
-    /// otherwise one GroundControl creates on the network of the project (the one most services are on, the default network of the project).
+    /// otherwise one GroundControl manages on the network of the project (the one most services are on, the default network of the project).
     /// </summary>
     public async Task<TestContainer> GetTestContainerAsync(string assemblyPath, CancellationToken cancellationToken)
     {
@@ -55,24 +54,21 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
             ?? throw new InvalidOperationException($"Docker Compose project in {directory} is not running, start it: docker compose up --detach --build");
         containers = await this.WaitUntilReadyAsync(containers, cancellationToken);
 
-        var image = options.Image ?? TestContainer.GetImage(assemblyPath);
+        var image = options.Image ?? DotNetRuntimes.GetImage(assemblyPath);
         switch (containers.Where(container => container.Service == service && container.Declared).ToList())
         {
             case []:
                 var project = containers.Select(container => container.Project).FirstOrDefault(name => name.Length > 0) ?? Path.GetFileName(directory).ToLowerInvariant();
-                return TestContainer.Managed(project, service, image, network, directory);
+                return new ManagedTestContainer(project, service, image, network, directory);
 
-            case [{ State: "running" } declared]:
-                if (!declared.Networks.Contains(network))
-                {
-                    throw new InvalidOperationException(
-                        $"The {service} service of the Docker Compose project in {directory} is not on the {network} network of the services: add it to the network.");
-                }
-
-                var container = TestContainer.OfService(declared.Name, service, network, declared.Mounts);
-                container.MapPath(assemblyPath);
-                await docker.CheckAsync(container, TestContainer.GetFrameworks(assemblyPath), image, cancellationToken);
+            case [{ State: "running" } declared] when declared.Networks.Contains(network):
+                var container = new ServiceTestContainer(declared.Name, service, network, declared.Mounts);
+                await container.CheckAsync(docker, assemblyPath, image, cancellationToken);
                 return container;
+
+            case [{ State: "running" }]:
+                throw new InvalidOperationException(
+                    $"The {service} service of the Docker Compose project in {directory} is not on the {network} network of the services: add it to the network.");
 
             case [var declared]:
                 throw new InvalidOperationException(
@@ -90,7 +86,7 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
     /// </summary>
     /// <returns>The containers of the project once ready.</returns>
     /// <remarks>
-    /// The tests service, if declared, is waited for to run, not to be healthy. The tests container GroundControl creates is not a service.
+    /// The tests service, if declared, is waited for to run, not to be healthy. The tests container GroundControl manages is not a service.
     /// </remarks>
     private async Task<List<ComposeContainer>> WaitUntilReadyAsync(List<ComposeContainer> containers, CancellationToken cancellationToken)
     {
@@ -126,55 +122,12 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
         }
     }
 
-    private Task<List<ComposeContainer>> GetContainersAsync(CancellationToken cancellationToken) =>
-        docker.GetComposeContainersAsync(options.Project, directory, cancellationToken);
-}
-
-/// <summary>
-/// A container of the Docker Compose project, as inspected: declared if Docker Compose has created it for a service of the project
-/// (rather than GroundControl), and the host directories mounted into it (bind mounts), with their paths within it.
-/// </summary>
-internal sealed record ComposeContainer(
-    string Id,
-    string Name,
-    string Project,
-    string Service,
-    string State,
-    string Health,
-    long ExitCode,
-    IReadOnlyList<string> Networks,
-    bool Declared,
-    IReadOnlyList<(string Source, string Destination)> Mounts)
-{
-    /// <summary>The label Docker Compose gives the containers it creates (the hash of their configuration), which GroundControl does not.</summary>
-    public const string ConfigHashLabel = "com.docker.compose.config-hash";
-
-    /// <summary>Healthy, running without a healthcheck, or completed successfully (one-off services).</summary>
-    public bool IsReady =>
-        this.Health == "healthy" || (this.State == "running" && this.Health.Length == 0) || (this.State == "exited" && this.ExitCode == 0);
-
-    public bool HasFailed => this.Health == "unhealthy" || (this.State is "exited" or "dead" && this.ExitCode != 0);
-
-    public string Status => this.Health.Length > 0 ? $"{this.State}, {this.Health}" : this.State == "exited" ? $"exited with {this.ExitCode}" : this.State;
-
-    public static ComposeContainer From(ContainerInspectResponse container) => From(container, OperatingSystem.IsWindows());
-
-    internal static ComposeContainer From(ContainerInspectResponse container, bool windowsHost)
-    {
-        var labels = container.Config?.Labels;
-        return new ComposeContainer(
-            container.ID,
-            container.Name.TrimStart('/'),
-            DockerEngine.Label(labels, DockerEngine.ProjectLabel) ?? string.Empty,
-            DockerEngine.Label(labels, DockerEngine.ServiceLabel) ?? string.Empty,
-            container.State?.Status ?? string.Empty,
-            container.State?.Health?.Status is { } health && health != "none" ? health : string.Empty,
-            container.State?.ExitCode ?? 0,
-            container.NetworkSettings?.Networks?.Keys.ToList() ?? [],
-            DockerEngine.Label(labels, ConfigHashLabel) is not null,
-            container.Mounts?
-                .Where(mount => mount.Type == "bind")
-                .Select(mount => (TestContainer.ToHostPath(mount.Source, windowsHost), mount.Destination))
-                .ToList() ?? []);
-    }
+    /// <summary>The containers of the project: by its name if configured, otherwise the ones of the project directory.</summary>
+    private async Task<List<ComposeContainer>> GetContainersAsync(CancellationToken cancellationToken) =>
+        (await docker.InspectContainersAsync(ComposeLabels.Project, cancellationToken))
+            .Where(container => options.Project is { } project
+                ? ComposeLabels.Get(container.Config?.Labels, ComposeLabels.Project) == project
+                : ComposeLabels.Get(container.Config?.Labels, ComposeLabels.ProjectDirectory) is { } projectDirectory && HostPath.Same(projectDirectory, directory))
+            .Select(container => ComposeContainer.From(container, OperatingSystem.IsWindows()))
+            .ToList();
 }

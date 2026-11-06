@@ -5,7 +5,7 @@ using Xunit;
 
 namespace GroundControl.Tests;
 
-public class DockerEngineTests
+public class DockerEndpointTests
 {
     [Theory]
     [InlineData(true, "npipe://./pipe/docker_engine")]
@@ -14,8 +14,8 @@ public class DockerEngineTests
     {
         using var store = new ContextStore();
 
-        Assert.Equal(endpoint, DockerEngine.ResolveEndpoint(null, "default", store.Directory, windows));
-        Assert.Equal(endpoint, DockerEngine.ResolveEndpoint(null, null, store.Directory, windows));
+        Assert.Equal(endpoint, DockerEndpoint.Resolve(null, "default", store.Directory, windows));
+        Assert.Equal(endpoint, DockerEndpoint.Resolve(null, null, store.Directory, windows));
     }
 
     [Fact]
@@ -23,7 +23,7 @@ public class DockerEngineTests
     {
         using var store = new ContextStore();
 
-        Assert.Equal("tcp://build:2375", DockerEngine.ResolveEndpoint("tcp://build:2375", "desktop-linux", store.Directory, windows: true));
+        Assert.Equal("tcp://build:2375", DockerEndpoint.Resolve("tcp://build:2375", "desktop-linux", store.Directory, windows: true));
     }
 
     // The context store of the Docker CLI: the endpoints of the contexts by the hash of their names, and the current one in the configuration.
@@ -35,9 +35,9 @@ public class DockerEngineTests
         store.Add("remote", "tcp://build:2376");
         store.Current("desktop-linux");
 
-        Assert.Equal("npipe://./pipe/dockerDesktopLinuxEngine", DockerEngine.ResolveEndpoint(null, null, store.Directory, windows: true));
-        Assert.Equal("tcp://build:2376", DockerEngine.ResolveEndpoint(null, "remote", store.Directory, windows: true));
-        Assert.Contains("missing", Assert.Throws<InvalidOperationException>(() => DockerEngine.ResolveEndpoint(null, "missing", store.Directory, windows: true)).Message);
+        Assert.Equal("npipe://./pipe/dockerDesktopLinuxEngine", DockerEndpoint.Resolve(null, null, store.Directory, windows: true));
+        Assert.Equal("tcp://build:2376", DockerEndpoint.Resolve(null, "remote", store.Directory, windows: true));
+        Assert.Contains("missing", Assert.Throws<InvalidOperationException>(() => DockerEndpoint.Resolve(null, "missing", store.Directory, windows: true)).Message);
     }
 
     private sealed class ContextStore : IDisposable
