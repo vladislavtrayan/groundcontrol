@@ -39,8 +39,8 @@ public sealed class SampleProject : IAsyncLifetime
     {
         if (this.Available)
         {
-            await RunAsync("docker", ["rm", "--force", "groundcontrol"], this.directory);
-            await RunAsync("docker", ["compose", "down"], this.directory);
+            // The tests container is labeled as a service of the project: an orphan, if a run has not dropped it.
+            await RunAsync("docker", ["compose", "down", "--remove-orphans"], this.directory);
         }
     }
 

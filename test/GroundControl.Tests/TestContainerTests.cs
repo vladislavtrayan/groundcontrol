@@ -11,7 +11,7 @@ public class TestContainerTests
     [Fact]
     public void MapsMountedPaths()
     {
-        var container = new TestContainer("groundcontrol", "image", "network", Project);
+        var container = new TestContainer("sample", "groundcontrol", "image", "network", Project);
 
         Assert.Equal("/workspace/bin/Debug/Tests.dll", container.MapPath(Path.Combine(Project, "bin", "Debug", "Tests.dll")));
     }
@@ -19,7 +19,7 @@ public class TestContainerTests
     [Fact]
     public void RejectsOtherPaths()
     {
-        var container = new TestContainer("groundcontrol", "image", "network", Project);
+        var container = new TestContainer("sample", "groundcontrol", "image", "network", Project);
 
         Assert.Throws<InvalidOperationException>(() => container.MapPath(Path.Combine(Path.GetTempPath(), "project-other", "Tests.dll")));
         Assert.Throws<InvalidOperationException>(() => container.MapPath(Path.Combine(Path.GetTempPath(), "Tests.dll")));
@@ -56,13 +56,17 @@ public class TestContainerTests
     }
 
     [Fact]
-    public void CreatesContainerOnNetworkByName()
+    public void CreatesContainerOfProjectOnNetworkByName()
     {
-        var container = new TestContainer("groundcontrol", "mcr.microsoft.com/dotnet/runtime:8.0", "sample_default", Project);
+        var container = new TestContainer("sample", "groundcontrol", "mcr.microsoft.com/dotnet/runtime:8.0", "sample_default", Project);
 
         var arguments = container.Create();
 
-        Assert.Equal(["run", "--detach", "--init", "--name", "groundcontrol", "--hostname", "groundcontrol", "--network", "sample_default"], arguments.Take(9));
+        Assert.Equal("sample-groundcontrol-1", container.Name);
+        Assert.Equal(
+            ["run", "--detach", "--init", "--name", "sample-groundcontrol-1", "--hostname", "groundcontrol", "--network", "sample_default", "--network-alias", "groundcontrol"],
+            arguments.Take(11));
+        Assert.Equal(["com.docker.compose.project=sample", "com.docker.compose.service=groundcontrol", "com.docker.compose.oneoff=False"], arguments.Skip(11).Take(6).Where(argument => argument != "--label"));
         Assert.Contains($"type=bind,source={Project},target=/workspace,readonly", arguments);
         Assert.Contains("type=volume,source=groundcontrol-debugger-tools,target=/root/.RiderDebuggerTools", arguments);
         Assert.Equal(["mcr.microsoft.com/dotnet/runtime:8.0", "sleep", "infinity"], arguments.TakeLast(3));
@@ -71,21 +75,25 @@ public class TestContainerTests
     [Fact]
     public void RunsWithinContainer()
     {
-        var container = new TestContainer("groundcontrol", "image", "network", Project);
+        var container = new TestContainer("sample", "groundcontrol", "image", "network", Project);
 
-        Assert.Equal(["exec", "--interactive", "--env", "GROUNDCONTROL_CONTAINER=groundcontrol", "--workdir", "/workspace/bin", "groundcontrol"], container.Run("/workspace/bin"));
-        Assert.Equal(["exec", "groundcontrol", "kill", "42"], container.Stop(42));
+        Assert.Equal(
+            ["exec", "--interactive", "--env", "GROUNDCONTROL_CONTAINER=groundcontrol", "--workdir", "/workspace/bin", "sample-groundcontrol-1"],
+            container.Run("/workspace/bin"));
+        Assert.Equal(["exec", "sample-groundcontrol-1", "kill", "42"], container.Stop(42));
         Assert.Null(container.Stop(null));
     }
 
-    [Fact]
-    public void ParsesContainerState()
+    [Theory]
+    [InlineData("""["a","b"]""", 2)]
+    [InlineData("null", 0)]
+    public void ParsesContainerState(string execs, int processes)
     {
-        const string inspection = """
-            {"State":{"Running":true},"Config":{"Image":"mcr.microsoft.com/dotnet/runtime:8.0"},
+        var inspection = """
+            {"State":{"Running":true},"Config":{"Image":"mcr.microsoft.com/dotnet/runtime:8.0"},"ExecIDs":EXECS,
              "Mounts":[{"Type":"volume","Source":"tools","Destination":"/root/.RiderDebuggerTools"},{"Type":"bind","Source":"/run/desktop/mnt/host/c/Work/project","Destination":"/workspace"}],
              "NetworkSettings":{"Networks":{"sample_default":{},"other":{}}}}
-            """;
+            """.Replace("EXECS", execs);
 
         var state = ContainerState.Parse(JsonDocument.Parse(inspection).RootElement, "/workspace", windowsHost: true);
 
@@ -93,5 +101,6 @@ public class TestContainerTests
         Assert.Equal("mcr.microsoft.com/dotnet/runtime:8.0", state.Image);
         Assert.Equal(@"C:\Work\project", state.ProjectDirectory);
         Assert.Equal(["sample_default", "other"], state.Networks);
+        Assert.Equal(processes, state.Processes);
     }
 }

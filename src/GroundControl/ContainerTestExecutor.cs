@@ -163,7 +163,36 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
         var docker = new DockerClient(options.Docker, options.DockerContext);
         var project = ComposeProject.Find(docker, options, assembly.Location);
         var container = await project.GetTestContainerAsync(assembly.Location, cancellation.Token);
+        try
+        {
+            var @lock = await container.StartAsync(docker, cancellation.Token);
+            try
+            {
+                await this.RunAsync(testCases, mapper, executionMessageSink, executionOptions, cancellation, docker, project, container, @lock);
+            }
+            finally
+            {
+                @lock.Dispose();
+            }
+        }
+        finally
+        {
+            // The container is dropped by the last run (or if it has not started).
+            await container.ReleaseAsync(docker, CancellationToken.None);
+        }
+    }
 
+    private async Task RunAsync(
+        IReadOnlyCollection<ITestCase> testCases,
+        MessageMapper mapper,
+        IMessageSink executionMessageSink,
+        ITestFrameworkExecutionOptions executionOptions,
+        CancellationTokenSource cancellation,
+        DockerClient docker,
+        ComposeProject project,
+        TestContainer container,
+        IDisposable containerLock)
+    {
         List<string> arguments = ["-automated", "async", "-noLogo", "-noColor", .. Arguments(executionOptions)];
 
         // The debugger attaches to the remote test process, the tests wait for it.
@@ -187,6 +216,8 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
             serializations,
             processId =>
             {
+                // The test process runs within the container: another run may drop it once this one completes (see TestContainer).
+                containerLock.Dispose();
                 if (Debugger.IsAttached)
                 {
                     _ = Debuggers.AttachAsync(new DebugTarget(container.Name, processId, project.Directory, assembly.Location), cancellation.Token);

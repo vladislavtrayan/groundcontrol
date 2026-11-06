@@ -20,8 +20,8 @@ public sealed record GroundControlOptions
     // containing a Compose file.
     public string? ProjectDirectory { get; init; }
 
-    // Name of the tests container (kept running for the test runs of every test assembly), which services reach the tests by;
-    // the tests are given it in GROUNDCONTROL_CONTAINER.
+    // Name of the tests container as a service of the project (run within for every test assembly while test runs are in progress),
+    // which services reach the tests by; the tests are given it in GROUNDCONTROL_CONTAINER.
     public string Container { get; init; } = "groundcontrol";
 
     // Image of the tests container; by default, the .NET (or ASP.NET Core) image of the test assembly runtime.

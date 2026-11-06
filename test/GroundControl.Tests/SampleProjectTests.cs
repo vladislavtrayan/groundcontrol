@@ -24,20 +24,42 @@ public class SampleProjectTests(SampleProject sample) : IClassFixture<SampleProj
         Assert.Equal(Tests, finished.GetProperty("TestsTotal").GetInt32() - finished.GetProperty("TestsNotRun").GetInt32());
     }
 
-    // The tests container is kept for the runs, on the network of the project, where the services reach it by its name.
+    // The tests container of the project is shared by the runs in progress (within the same container, so a quick test only), and dropped
+    // by the last of them.
     [Fact]
-    public async Task KeepsContainerReachedByName()
+    public async Task SharesContainerAndDropsItAfterLastRun()
     {
-        const string test = "GroundControl.Tests.Sample.NetworkTests.RunsWithinContainer";
+        string[] test = ["-method", "GroundControl.Tests.Sample.NetworkTests.RunsWithinContainer"];
 
-        Assert.Equal(0, (await sample.RunAsync(["-method", test])).ExitCode);
-        var container = await sample.DockerAsync("inspect", "--format", "{{.Id}} {{.State.Running}}", "groundcontrol");
-        Assert.Equal(0, (await sample.RunAsync(["-method", test])).ExitCode);
+        var runs = await Task.WhenAll(sample.RunAsync(test), sample.RunAsync(test), sample.RunAsync(test));
 
-        Assert.Equal(container.Output, (await sample.DockerAsync("inspect", "--format", "{{.Id}} {{.State.Running}}", "groundcontrol")).Output);
-        Assert.EndsWith(" true", Assert.Single(container.Output));
-        var resolution = await sample.DockerAsync("exec", "groundcontrol-sample-web-1", "nslookup", "groundcontrol");
+        Assert.All(runs, run => Assert.Equal(0, run.ExitCode));
+        Assert.All(runs, run => Assert.Single(run.Of("test-passed")));
+        Assert.NotEqual(0, (await sample.DockerAsync("container", "inspect", "groundcontrol-sample-groundcontrol-1")).ExitCode);
+    }
+
+    // The services of the project reach the tests container by its name while a run is in progress.
+    [Fact]
+    public async Task IsReachedByNameFromServices()
+    {
+        var run = sample.RunAsync(["-method", "GroundControl.Tests.Sample.NetworkTests.IsReachedByName"]);
+        var resolution = await ResolveAsync("groundcontrol", run);
+
+        Assert.Equal(0, (await run).ExitCode);
         Assert.True(resolution.ExitCode == 0, $"groundcontrol is not resolved by the web service:{Environment.NewLine}{resolution.Error}");
+    }
+
+    // Resolves the name by the web service while the run is in progress (the tests container exists once the run has started).
+    private async Task<(int ExitCode, List<string> Output, string Error)> ResolveAsync(string name, Task<SampleRun> run)
+    {
+        var resolution = (ExitCode: -1, Output: new List<string>(), Error: "The run has completed before the name was resolved.");
+        while (!run.IsCompleted && resolution.ExitCode != 0)
+        {
+            resolution = await sample.DockerAsync("exec", "groundcontrol-sample-web-1", "nslookup", name);
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+
+        return resolution;
     }
 
     [Fact]
