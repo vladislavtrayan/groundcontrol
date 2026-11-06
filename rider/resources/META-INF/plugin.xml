@@ -2,7 +2,7 @@
     <id>groundcontrol</id>
     <name>GroundControl</name>
     <vendor>Uladzislau Trayan</vendor>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <description>Attaches the debugger to tests run within a container by GroundControl.</description>
     <idea-version since-build="262"/>
 
