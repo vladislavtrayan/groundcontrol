@@ -2,8 +2,10 @@ using System.Diagnostics;
 
 namespace GroundControl.Debugging;
 
-// Attaches the debugger to a test process within the tests container, which waits for it when tests are debugged:
-// by the IDE integration (Rider), otherwise manually (the process is reported in the debug output of the IDE).
+/// <summary>
+/// Attaches the debugger to a test process within the tests container, which waits for it when tests are debugged:
+/// by the IDE integration (Rider), otherwise manually (the process is reported in the debug output of the IDE).
+/// </summary>
 internal static class Debuggers
 {
     public static async Task AttachAsync(DebugTarget target, CancellationToken cancellationToken)
@@ -26,5 +28,7 @@ internal static class Debuggers
     public static void Log(string message) => Debugger.Log(0, nameof(GroundControlTestFramework), message + Environment.NewLine);
 }
 
-// The test process to attach the debugger to, the Docker Compose project directory of the tests and the test assembly (e.g., to find the IDE project).
+/// <summary>
+/// The test process to attach the debugger to, the Docker Compose project directory of the tests and the test assembly (e.g., to find the IDE project).
+/// </summary>
 internal sealed record DebugTarget(string ContainerName, int ProcessId, string ProjectDirectory, string AssemblyPath);

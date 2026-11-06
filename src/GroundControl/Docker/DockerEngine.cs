@@ -8,8 +8,10 @@ using GroundControl.Configuration;
 
 namespace GroundControl.Docker;
 
-// The Docker Engine, by its API at the endpoint of the Docker CLI context (DockerContext setting, DOCKER_CONTEXT, the current one)
-// or the configured host (DockerHost setting, DOCKER_HOST).
+/// <summary>
+/// The Docker Engine, by its API at the configured host (<see cref="GroundControlOptions.DockerHost"/>, <c>DOCKER_HOST</c>)
+/// or at the endpoint of the Docker CLI context (<see cref="GroundControlOptions.DockerContext"/>, <c>DOCKER_CONTEXT</c>, the current one).
+/// </summary>
 internal sealed class DockerEngine : IDisposable
 {
     public const string ProjectLabel = "com.docker.compose.project";
@@ -31,7 +33,9 @@ internal sealed class DockerEngine : IDisposable
             ? directory
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".docker");
 
-    // The endpoint of the Docker Engine API as the Docker CLI resolves it: the host, otherwise the context (its endpoint in the context store).
+    /// <summary>
+    /// The endpoint of the Docker Engine API as the Docker CLI resolves it: the host, otherwise the endpoint of the context in the context store.
+    /// </summary>
     internal static string ResolveEndpoint(string? host, string? context, string configDirectory, bool windows)
     {
         if ((host ?? Environment.GetEnvironmentVariable("DOCKER_HOST")) is { Length: > 0 } configured)
@@ -56,7 +60,7 @@ internal sealed class DockerEngine : IDisposable
             : throw new InvalidOperationException($"Docker context {name} has no Docker endpoint ({meta}).");
     }
 
-    // The containers of the Docker Compose project: by its name if configured, otherwise the ones of the project directory.
+    /// <summary>The containers of the Docker Compose project: by its name if configured, otherwise the ones of the project directory.</summary>
     public async Task<List<ComposeContainer>> GetComposeContainersAsync(string? project, string directory, CancellationToken cancellationToken)
     {
         IList<ContainerListResponse> containers;
@@ -90,7 +94,7 @@ internal sealed class DockerEngine : IDisposable
         return result;
     }
 
-    // Removes the container, killing its process.
+    /// <summary>Removes the container, killing its process.</summary>
     public async Task RemoveContainerAsync(string id, CancellationToken cancellationToken)
     {
         try
@@ -103,9 +107,14 @@ internal sealed class DockerEngine : IDisposable
         }
     }
 
-    // Runs a container (pulling its image if absent) with the files (by their paths within the container) and reports the process ID
-    // of its command and its output lines; returns its exit code and the end of its standard error. The container is removed once it
-    // exits (killed on cancellation); if the test host dies, its command runs to completion first.
+    /// <summary>
+    /// Runs a container (pulling its image if absent) with the files, by their paths within the container, and reports the process ID
+    /// of its command and its output lines.
+    /// </summary>
+    /// <returns>The exit code of the container and the end of its standard error.</returns>
+    /// <remarks>
+    /// The container is removed once it exits, and killed on cancellation; if the test host dies, its command runs to completion first.
+    /// </remarks>
     public async Task<(long ExitCode, string Error)> RunAsync(
         CreateContainerParameters parameters,
         IReadOnlyDictionary<string, string> files,
@@ -166,7 +175,7 @@ internal sealed class DockerEngine : IDisposable
         }
     }
 
-    // The process ID of the command of the container (its first process but the init one), once it runs.
+    /// <summary>The process ID of the command of the container, found by its name in the process list once it runs.</summary>
     private async Task<int?> FindProcessAsync(string id, string command, CancellationToken cancellationToken)
     {
         var name = Path.GetFileName(command);
@@ -239,7 +248,7 @@ internal sealed class DockerEngine : IDisposable
             : null;
     }
 
-    // The context store writes named pipes as npipe:////./pipe/name, the client reads npipe://./pipe/name.
+    /// <summary>The context store writes named pipes as <c>npipe:////./pipe/name</c>, while the client reads <c>npipe://./pipe/name</c>.</summary>
     private static string Normalize(string endpoint) => endpoint.Replace("npipe:////./", "npipe://./", StringComparison.Ordinal);
 
     private static bool SamePath(string path, string other) =>
@@ -248,7 +257,7 @@ internal sealed class DockerEngine : IDisposable
             Path.TrimEndingDirectorySeparator(other),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
-    // Lines of a stream read in chunks (split before decoding, so multi-byte characters are kept whole).
+    /// <summary>Lines of a stream read in chunks, split before decoding so multi-byte characters are kept whole.</summary>
     private sealed class LineBuffer(Action<string> onLine)
     {
         private readonly MemoryStream pending = new();

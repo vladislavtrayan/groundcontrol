@@ -3,20 +3,24 @@ using Docker.DotNet.Models;
 
 namespace GroundControl.Docker;
 
-// A container created for a test run within the Docker Compose project (named and labeled as a one-off of its groundcontrol service),
-// on its network, where the services reach the tests by the service name; the test process is its main process, and it is removed
-// once the run completes. The project directory is mounted into it.
+/// <summary>
+/// A container created for a test run within the Docker Compose project, named and labeled as a one-off of its service
+/// (<see cref="GroundControl.Configuration.GroundControlOptions.Container"/>), on its network, where the services reach the tests
+/// by the service name. The test process is its main process, and it is removed once the run completes. The project directory is mounted into it.
+/// </summary>
 internal sealed class TestContainer(string project, string service, string image, string network, string projectDirectory)
 {
     private const string Workspace = "/workspace";
 
-    // Rider deploys its debugger tools into the container on the first attach, kept in a volume so later containers have them.
+    /// <summary>
+    /// The volume keeping the debugger tools Rider deploys into the container on the first attach, so the containers of later runs have them.
+    /// </summary>
     private const string DebuggerToolsVolume = "groundcontrol-debugger-tools";
     private const string DebuggerToolsDirectory = "/root/.RiderDebuggerTools";
 
     public string Name { get; } = $"{project}-{service}-run-{Guid.NewGuid():N}"[..(project.Length + service.Length + 14)];
 
-    // The .NET image of the test assembly runtime: ASP.NET Core if the test assembly runs on it, otherwise .NET.
+    /// <summary>The .NET image of the test assembly runtime: ASP.NET Core if the test assembly runs on it, otherwise .NET.</summary>
     public static string GetImage(string assemblyPath)
     {
         var runtimeConfig = Path.ChangeExtension(assemblyPath, ".runtimeconfig.json");
@@ -28,7 +32,7 @@ internal sealed class TestContainer(string project, string service, string image
             : $"mcr.microsoft.com/dotnet/runtime:{version}";
     }
 
-    // The container running the command with the environment (given the name the services reach it by).
+    /// <summary>The container running the command with the environment, given the name the services reach it by.</summary>
     public CreateContainerParameters Create(string workingDirectory, IList<string> command, IEnumerable<string> environment) => new()
     {
         Name = this.Name,
@@ -61,7 +65,7 @@ internal sealed class TestContainer(string project, string service, string image
         },
     };
 
-    // Maps a path of the host within the project directory to the container.
+    /// <summary>Maps a path of the host within the project directory to the container.</summary>
     public string MapPath(string path)
     {
         var relative = Path.GetRelativePath(projectDirectory, path);

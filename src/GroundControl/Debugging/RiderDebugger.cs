@@ -2,14 +2,17 @@ using System.Net;
 
 namespace GroundControl.Debugging;
 
-// Asks Rider to attach its debugger to the test process (GroundControl Rider plugin, see rider/build.ps1).
+/// <summary>Asks Rider to attach its debugger to the test process (GroundControl Rider plugin, see rider/build.ps1).</summary>
 internal static class RiderDebugger
 {
-    // Ports of the IDE built-in server.
+    /// <summary>The first port of the IDE built-in server.</summary>
     private const int FirstPort = 63342;
+
+    /// <summary>The last port of the IDE built-in server.</summary>
     private const int LastPort = 63361;
 
-    // Returns false if Rider is not running (with the plugin and the project open), so the debugger is attached manually.
+    /// <summary>Asks the Rider instance having the project open to attach its debugger to the test process.</summary>
+    /// <returns>False if Rider is not running with the plugin and the project open, so the debugger is attached manually.</returns>
     public static async Task<bool> AttachAsync(DebugTarget target, CancellationToken cancellationToken)
     {
         // Attaching deploys the debugger tools into the container first.

@@ -5,11 +5,13 @@ using Xunit.Sdk;
 
 namespace GroundControl;
 
-// Maps messages of the remote test process to the local test cases. The remote test process runs the local test cases as they are
-// (see TestCaseSerialization), so it reports their unique IDs; only the test assembly path differs.
+/// <summary>
+/// Maps messages of the remote test process to the local test cases. The remote test process runs the local test cases as they are
+/// (see <see cref="TestCaseSerialization"/>), so it reports their unique IDs; only the test assembly path differs.
+/// </summary>
 internal class MessageMapper
 {
-    // xUnit.net JSON deserializer does not support escaped characters (e.g., '+' as '+').
+    /// <summary>The xUnit.net JSON deserializer does not read escaped characters (e.g., <c>+</c> written as <c>+</c>).</summary>
     private static readonly JsonSerializerOptions JsonOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private readonly string assemblyPath;
@@ -27,7 +29,7 @@ internal class MessageMapper
         this.requested = testCases.ToDictionary(testCase => testCase.UniqueID);
     }
 
-    // Requested test cases the remote test process has not finished (e.g., it has crashed running them).
+    /// <summary>Requested test cases the remote test process has not finished (e.g., it has crashed running them).</summary>
     public IEnumerable<PendingTestCase> Pending =>
         this.requested.Values
             .Where(testCase => !this.finished.Contains(testCase.UniqueID))
@@ -35,17 +37,22 @@ internal class MessageMapper
                 ? new PendingTestCase(testCase, true, progress.Tests, progress.RunningTest)
                 : new PendingTestCase(testCase, false, 0, null));
 
-    // Results reported so far, as counted by the test assembly summary.
+    /// <summary>The number of tests reported so far, as counted by the test assembly summary.</summary>
     public int TestsTotal { get; private set; }
 
+    /// <summary>The number of failed tests reported so far.</summary>
     public int TestsFailed { get; private set; }
 
+    /// <summary>The number of skipped tests reported so far.</summary>
     public int TestsSkipped { get; private set; }
 
+    /// <summary>The number of tests reported as not run so far.</summary>
     public int TestsNotRun { get; private set; }
 
-    // Returns the message mapped to the local test cases, or null if it is not a message (e.g., the output of the tests)
-    // or it is not reported locally.
+    /// <summary>Maps a line of the output of the remote test process to the local test cases.</summary>
+    /// <returns>
+    /// The mapped message, or null if the line is not a message (e.g., the output of the tests) or the message is not reported locally.
+    /// </returns>
     public MappedMessage? Map(string line)
     {
         JsonObject? message;
@@ -147,7 +154,9 @@ internal class MessageMapper
         }
     }
 
-    // Control characters escaped to read a message (JSON does not allow them). A message is a line, so they occur within strings only.
+    /// <summary>
+    /// Escapes control characters to read a message, as JSON does not allow them; a message is a line, so they occur within strings only.
+    /// </summary>
     private static string Escape(string line) =>
         line.Any(character => character < ' ')
             ? string.Concat(line.Select(character => character < ' ' ? $"\\u{(int)character:x4}" : character.ToString()))
@@ -161,7 +170,10 @@ internal class MessageMapper
     }
 }
 
+/// <summary>A message of the remote test process mapped to the local test cases: its type and its JSON.</summary>
 internal sealed record MappedMessage(string Type, string Json);
 
-// A requested test case not finished: the number of its tests started (the index of the next one) and its running test, if any.
+/// <summary>
+/// A requested test case not finished: the number of its tests started (the index of the next one) and its running test, if any.
+/// </summary>
 internal sealed record PendingTestCase(ITestCase TestCase, bool Started, int TestsStarted, string? RunningTest);

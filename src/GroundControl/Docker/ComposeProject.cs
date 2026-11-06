@@ -3,15 +3,20 @@ using GroundControl.Configuration;
 
 namespace GroundControl.Docker;
 
-// The Docker Compose project of the tests: the containers labeled by Docker Compose with the project directory (the closest directory
-// of the test assembly containing a Compose file, unless configured), or with the project name if configured.
+/// <summary>
+/// The Docker Compose project of the tests: the containers labeled by Docker Compose with the project directory (the closest directory
+/// of the test assembly containing a Compose file, unless configured), or with the project name if configured.
+/// </summary>
 internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions options, string directory)
 {
     private static readonly string[] ComposeFiles = ["compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"];
 
     public string Directory => directory;
 
-    // The configured project directory (relative to the test assembly), otherwise the closest directory of the test assembly containing a Compose file.
+    /// <summary>
+    /// The project of the configured directory (relative to the test assembly), otherwise of the closest directory of the test assembly
+    /// containing a Compose file.
+    /// </summary>
     public static ComposeProject Find(DockerEngine docker, GroundControlOptions options, string assemblyPath)
     {
         var assemblyDirectory = Path.GetDirectoryName(assemblyPath);
@@ -31,8 +36,10 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
             : throw new InvalidOperationException($"Docker Compose file ({string.Join(", ", ComposeFiles)}) is not found in directories of {assemblyPath}.");
     }
 
-    // The container for the test run on the network of the project (the one most services are on, the default network of the project),
-    // once the project is ready and no other test run is in progress.
+    /// <summary>
+    /// The container for the test run on the network of the project (the one most services are on, the default network of the project),
+    /// once the project is ready and no other test run is in progress.
+    /// </summary>
     public async Task<TestContainer> GetTestContainerAsync(string assemblyPath, CancellationToken cancellationToken)
     {
         var containers = await this.GetContainersAsync(cancellationToken);
@@ -52,9 +59,13 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
         return new TestContainer(project, options.Container, options.Image ?? TestContainer.GetImage(assemblyPath), network, directory);
     }
 
-    // Waits until the services of the project are healthy and its one-off services (e.g., migrations) have completed,
-    // as services do not wait for each other: Docker Compose dependency conditions disable debugging of services in IDEs.
-    // Test runs of the project run one at a time: the services reach the tests container by the service name, so there is one.
+    /// <summary>
+    /// Waits until the services of the project are healthy and its one-off services (e.g., migrations) have completed, as services do not
+    /// wait for each other: Docker Compose dependency conditions disable debugging of services in IDEs.
+    /// </summary>
+    /// <remarks>
+    /// Test runs of the project run one at a time: the services reach the tests container by the service name, so there is one.
+    /// </remarks>
     private async Task WaitUntilReadyAsync(List<ComposeContainer> containers, CancellationToken cancellationToken)
     {
         if (options.ReadinessTimeout <= TimeSpan.Zero)
@@ -88,10 +99,10 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
         docker.GetComposeContainersAsync(options.Project, directory, cancellationToken);
 }
 
-// A container of the Docker Compose project, as inspected.
+/// <summary>A container of the Docker Compose project, as inspected.</summary>
 internal sealed record ComposeContainer(string Id, string Name, string Project, string Service, string State, string Health, long ExitCode, IReadOnlyList<string> Networks)
 {
-    // Healthy, running without a healthcheck, or completed successfully (one-off services).
+    /// <summary>Healthy, running without a healthcheck, or completed successfully (one-off services).</summary>
     public bool IsReady =>
         this.Health == "healthy" || (this.State == "running" && this.Health.Length == 0) || (this.State == "exited" && this.ExitCode == 0);
 

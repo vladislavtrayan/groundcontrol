@@ -4,12 +4,14 @@ using Xunit.v3;
 
 namespace GroundControl;
 
-// The local test cases run by the remote test process as they are: their serializations keep the unique IDs of the local test cases
-// (and their theory data rows), so the remote test process reports them as of the local test cases. Serializations contain
-// the path of the test assembly, which is replaced by its path within the tests container.
+/// <summary>
+/// The local test cases run by the remote test process as they are: their serializations keep the unique IDs of the local test cases
+/// (and their theory data rows), so the remote test process reports them as of the local test cases. Serializations contain
+/// the path of the test assembly, which is replaced by its path within the tests container.
+/// </summary>
 internal static class TestCaseSerialization
 {
-    // File of the serializations of the test cases (a line each) within the tests container.
+    /// <summary>The environment variable of the file of the serializations of the test cases (a line each) within the tests container.</summary>
     internal const string FileVariable = "GROUNDCONTROL_TEST_CASES";
 
     private const string ObjectType = "-3";
@@ -28,8 +30,12 @@ internal static class TestCaseSerialization
                 ?? throw new InvalidOperationException($"Test case is not deserialized: {line}"))
             .ToList();
 
-    // A serialized object is "-3:<type name>:<members>" (Base64-encoded), its members are lines "<key>:<type>:<value>",
-    // where values of objects are "<type name>:<members>"; the assembly path is the "ap" member of the test assembly.
+    /// <summary>Replaces the path of the test assembly in the serialization of a test case.</summary>
+    /// <remarks>
+    /// A serialized object is <c>-3:&lt;type name&gt;:&lt;members&gt;</c> (Base64-encoded), its members are lines
+    /// <c>&lt;key&gt;:&lt;type&gt;:&lt;value&gt;</c>, where values of objects are <c>&lt;type name&gt;:&lt;members&gt;</c>;
+    /// the assembly path is the <c>ap</c> member of the test assembly.
+    /// </remarks>
     internal static string ReplaceAssemblyPath(string serialization, string assemblyPath)
     {
         var parts = serialization.Split(':', 3);

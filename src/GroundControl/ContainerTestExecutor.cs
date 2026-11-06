@@ -10,7 +10,9 @@ using Xunit.v3;
 
 namespace GroundControl;
 
-// Runs the test cases by the same test assembly within the tests container and reports its results as of the local test cases.
+/// <summary>
+/// Runs the test cases by the same test assembly within the tests container and reports its results as of the local test cases.
+/// </summary>
 internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
 {
     public async ValueTask RunTestCases(
@@ -46,8 +48,11 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
         }
     }
 
-    // Reports the pending test cases as failed by the cause (continuing what the remote test process has reported of them) and returns
-    // their number: test runners count the results only, so test cases without results are not run silently (e.g., dotnet test succeeds).
+    /// <summary>
+    /// Reports the pending test cases as failed by the cause, continuing what the remote test process has reported of them: test runners
+    /// count the results only, so test cases without results are not run silently (e.g., dotnet test succeeds).
+    /// </summary>
+    /// <returns>The number of the test cases.</returns>
     private static int ReportFailed(IEnumerable<PendingTestCase> pending, Exception cause, IMessageSink executionMessageSink)
     {
         var (exceptionTypes, messages, stackTraces, exceptionParentIndices, failureCause) = ExceptionUtility.ExtractMetadata(cause);
@@ -230,7 +235,7 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
         }
     }
 
-    // The execution options of the local test run as the arguments of the remote one.
+    /// <summary>The execution options of the local test run as the arguments of the remote one.</summary>
     internal static List<string> Arguments(ITestFrameworkExecutionOptions executionOptions)
     {
         var arguments = new List<string>();

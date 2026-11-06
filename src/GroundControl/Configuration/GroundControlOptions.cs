@@ -4,48 +4,68 @@ using System.Text.RegularExpressions;
 
 namespace GroundControl.Configuration;
 
-// Settings of remote test runs, all optional: assembly metadata of the test assembly, e.g.,
-// <AssemblyMetadata Include="GroundControl.Network" Value="backend" /> in the test project, overridden by environment variables,
-// e.g., GROUNDCONTROL_NETWORK=backend (GROUNDCONTROL_ followed by the setting name in upper snake case).
-// GROUNDCONTROL_TEST_CASES and GROUNDCONTROL_CONTAINER are not settings: they are given to the remote test process.
+/// <summary>
+/// Settings of remote test runs, all optional: assembly metadata of the test assembly, e.g.,
+/// <c>&lt;AssemblyMetadata Include="GroundControl.Network" Value="backend" /&gt;</c> in the test project, overridden by environment variables,
+/// e.g., <c>GROUNDCONTROL_NETWORK=backend</c> (<c>GROUNDCONTROL_</c> followed by the setting name in upper snake case).
+/// </summary>
+/// <remarks>
+/// <c>GROUNDCONTROL_TEST_CASES</c> and <c>GROUNDCONTROL_CONTAINER</c> are not settings: they are given to the remote test process.
+/// </remarks>
 public sealed record GroundControlOptions
 {
     private const string MetadataPrefix = "GroundControl.";
     private const string VariablePrefix = "GROUNDCONTROL_";
 
-    // Docker Compose project name; by default, resolved by Docker Compose (COMPOSE_PROJECT_NAME, .env, Compose files).
+    /// <summary>
+    /// The Docker Compose project name; by default, the containers of the project are found by the project directory.
+    /// </summary>
     public string? Project { get; init; }
 
-    // Docker Compose project directory (relative to the test assembly); by default, the closest directory of the test assembly
-    // containing a Compose file.
+    /// <summary>
+    /// The Docker Compose project directory, relative to the test assembly; by default, the closest directory of the test assembly
+    /// containing a Compose file.
+    /// </summary>
     public string? ProjectDirectory { get; init; }
 
-    // Name of the tests container as a service of the project (one test run at a time), which services reach the tests by;
-    // the tests are given it in GROUNDCONTROL_CONTAINER.
+    /// <summary>
+    /// The name of the tests container as a service of the project (one test run at a time), which services reach the tests by;
+    /// the tests are given it in <c>GROUNDCONTROL_CONTAINER</c>.
+    /// </summary>
     public string Container { get; init; } = "groundcontrol";
 
-    // Image of the tests container; by default, the .NET (or ASP.NET Core) image of the test assembly runtime.
+    /// <summary>The image of the tests container; by default, the .NET (or ASP.NET Core) image of the test assembly runtime.</summary>
     public string? Image { get; init; }
 
-    // Network of the tests container; by default, the one most services of the project are on.
+    /// <summary>The network of the tests container; by default, the one most services of the project are on.</summary>
     public string? Network { get; init; }
 
-    // How long to wait for the project to be ready (every service healthy, or running if it has no healthcheck, one-off services,
-    // e.g., migrations, completed successfully, and no other test run in progress): seconds, or a time span (e.g., 00:05:00); 0 not to wait.
+    /// <summary>
+    /// How long to wait for the project to be ready: every service healthy (or running if it has no healthcheck), one-off services
+    /// (e.g., migrations) completed successfully, and no other test run in progress. Seconds, or a time span (e.g., <c>00:05:00</c>);
+    /// <c>0</c> not to wait.
+    /// </summary>
     public TimeSpan ReadinessTimeout { get; init; } = TimeSpan.FromMinutes(5);
 
-    // Docker Engine API endpoint (e.g., tcp://host:2375); by default, DOCKER_HOST, otherwise the one of the Docker context.
+    /// <summary>
+    /// The Docker Engine API endpoint (e.g., <c>tcp://host:2375</c>); by default, <c>DOCKER_HOST</c>, otherwise the one of the Docker context.
+    /// </summary>
     public string? DockerHost { get; init; }
 
-    // Docker CLI context (its endpoint is read from the context store); by default, DOCKER_CONTEXT, otherwise the current one.
+    /// <summary>
+    /// The Docker CLI context, whose endpoint is read from the context store; by default, <c>DOCKER_CONTEXT</c>, otherwise the current one.
+    /// </summary>
     public string? DockerContext { get; init; }
 
+    /// <summary>Loads the settings of the test assembly: its metadata, overridden by the environment variables.</summary>
+    /// <param name="assembly">The test assembly.</param>
+    /// <returns>The settings, with the defaults of the ones not set.</returns>
     public static GroundControlOptions Load(Assembly assembly) =>
         Load(
             assembly.GetCustomAttributes<AssemblyMetadataAttribute>().Select(attribute => (attribute.Key, attribute.Value)),
             Environment.GetEnvironmentVariable);
 
-    // Loads the settings from the assembly metadata (key and value pairs) and the environment variables (by name).
+    /// <summary>Loads the settings from the assembly metadata (key and value pairs) and the environment variables (by name).</summary>
     internal static GroundControlOptions Load(IEnumerable<(string Key, string? Value)> assemblyMetadata, Func<string, string?> environment)
     {
         var metadata = assemblyMetadata

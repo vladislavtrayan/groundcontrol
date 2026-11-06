@@ -1,10 +1,13 @@
 namespace GroundControl.Docker;
 
-// The test process run within the tests container.
+/// <summary>The test process run within the tests container.</summary>
 internal static class ContainerProcess
 {
-    // Runs the assembly by dotnet with the arguments, with the input lines in a file (its path in the given environment variable),
-    // reports the process ID and its output lines, and returns the end of its standard error.
+    /// <summary>
+    /// Runs the assembly by dotnet with the arguments, with the input lines in a file (its path in the given environment variable),
+    /// and reports the process ID and its output lines.
+    /// </summary>
+    /// <returns>The end of the standard error of the process.</returns>
     public static async Task<string> RunAsync(
         DockerEngine docker,
         TestContainer container,
