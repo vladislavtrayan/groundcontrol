@@ -13,7 +13,7 @@ Your tests call services by their Compose names (`http://api`, `postgres:5432`),
 
     ```xml
     <ItemGroup>
-        <PackageReference Include="GroundControl" Version="0.3.0" />
+        <PackageReference Include="GroundControl" Version="0.3.1" />
     </ItemGroup>
 
     <ItemGroup>
@@ -93,7 +93,7 @@ Start debugging as usual. The test process in the container waits for the debugg
 
 `rider/build.ps1` builds the Rider plugin and installs it into your local Rider.
 
-Pushing a version tag such as `0.3.0` publishes the package to nuget.org and creates a GitHub release with the plugin.
+Pushing a version tag such as `0.3.1` publishes the package to nuget.org and creates a GitHub release with the plugin.
 
 ## License
 

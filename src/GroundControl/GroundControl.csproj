@@ -10,7 +10,7 @@
 
     <PropertyGroup>
         <PackageId>GroundControl</PackageId>
-        <Version>0.3.0</Version>
+        <Version>0.3.1</Version>
         <Authors>Uladzislau Trayan</Authors>
         <Copyright>Copyright (c) 2026 Uladzislau Trayan</Copyright>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
