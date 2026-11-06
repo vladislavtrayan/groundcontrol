@@ -3,62 +3,95 @@
 
 # GroundControl
 
-Runs xUnit.net v3 tests inside a container of your Docker Compose project, whether started from an IDE, `dotnet test` or a pipeline. Tests reach services by their Compose names, and services reach the tests by name, while the runner, the results and the debugger stay on the host.
+Run your xUnit.net tests inside your Docker Compose project, straight from the IDE or `dotnet test`.
 
-## Usage
+Your tests call services by their Compose names (`http://api`, `postgres:5432`), and services can call back into your tests. The test runner, the results and the debugger stay on your machine, so everything works as usual.
 
-Reference the package and declare the test framework in the test project:
+## Getting started
 
-```xml
-<ItemGroup>
-    <PackageReference Include="GroundControl" Version="0.2.0" />
-</ItemGroup>
+1. Add the package and switch the test framework in your test project:
 
-<ItemGroup>
-    <AssemblyAttribute Include="Xunit.TestFrameworkAttribute">
-        <_Parameter1>GroundControl.GroundControlTestFramework</_Parameter1>
-        <_Parameter1_TypeName>System.Type</_Parameter1_TypeName>
-    </AssemblyAttribute>
-</ItemGroup>
-```
+    ```xml
+    <ItemGroup>
+        <PackageReference Include="GroundControl" Version="0.2.0" />
+    </ItemGroup>
 
-Start the project (`docker compose up --detach --build`) and run the tests as usual. The project is the closest Compose file above the test assembly; its containers are found by the labels Docker Compose gives them.
+    <ItemGroup>
+        <AssemblyAttribute Include="Xunit.TestFrameworkAttribute">
+            <_Parameter1>GroundControl.GroundControlTestFramework</_Parameter1>
+            <_Parameter1_TypeName>System.Type</_Parameter1_TypeName>
+        </AssemblyAttribute>
+    </ItemGroup>
+    ```
 
-Requirements: .NET 8 or later, xUnit.net v3 2.0 or later, and access to the Docker Engine API of the project (the socket or named pipe of the Docker CLI context, or `DOCKER_HOST`).
+2. Start your Compose project:
+
+    ```bash
+    docker compose up --detach --build
+    ```
+
+3. Run the tests as you normally do.
+
+GroundControl finds the project by the closest `compose.yaml` above the test assembly.
+
+You need .NET 8 or later, xUnit.net v3, and Docker.
 
 ## How it works
 
-GroundControl runs the same test assembly inside the project with the test cases the runner asked for, and reports the results as those of the local test cases, so IDEs and `dotnet test` work as usual.
+Each test run gets its own short-lived container on your project's network. The test assembly runs inside it, and the results come back to your runner as if the tests ran locally. The container is removed when the run ends.
 
-Each test run gets a container of its own, added to the project as a one-off of the `groundcontrol` service on the project network and removed when the run ends. The services reach the tests by that name (e.g., a web server hosted by a test fixture, which must listen on all interfaces, not on localhost), which the tests find in the `GROUNDCONTROL_CONTAINER` environment variable; for the name to point at one container, test runs of a project run one at a time, a run waiting for the one in progress. The container runs the .NET image of the test runtime with the project directory mounted read-only. Projects of parallel pipelines do not interfere, and `docker compose down` finds nothing of the tests.
+Your project directory is mounted read-only into the container, so tests can read files from it.
+
+Before running, GroundControl waits until your services are healthy and one-off jobs such as migrations have finished.
+
+## Calling your tests from services
+
+The tests container is reachable as `groundcontrol` on the project network. If a test fixture hosts a web server, services can call it at `http://groundcontrol:<port>`.
+
+Two things to keep in mind:
+
+- Listen on all interfaces (`http://*:8080` or `0.0.0.0`), not on `localhost`.
+- Read the name from the `GROUNDCONTROL_CONTAINER` environment variable rather than hard-coding it.
+
+Because the name must point to one container, runs of the same project take turns. Projects in parallel pipelines don't affect each other.
 
 ## Settings
 
-Optional, as assembly metadata (`<AssemblyMetadata Include="GroundControl.Network" Value="backend" />`) or environment variables (`GROUNDCONTROL_NETWORK=backend`):
+All settings are optional. Set them as assembly metadata in the test project:
 
-| Setting | Default | Description |
+```xml
+<ItemGroup>
+    <AssemblyMetadata Include="GroundControl.Network" Value="backend" />
+</ItemGroup>
+```
+
+Or as environment variables, which win over metadata: `GROUNDCONTROL_NETWORK=backend`.
+
+| Setting | What it does | Default |
 | --- | --- | --- |
-| `Project` | resolved by Compose | Compose project name. |
-| `ProjectDirectory` | closest Compose file | Compose project directory, relative to the test assembly. |
-| `Container` | `groundcontrol` | Name of the tests container as a service of the project, which the services reach the tests by. |
-| `Image` | .NET or ASP.NET Core image of the test runtime | Image of the tests container. |
-| `Network` | the one most services are on | Network of the tests container. |
-| `ReadinessTimeout` | 5 minutes | How long to wait for every service to be healthy (or running, without a healthcheck), one-off services to complete and the test run in progress to end, in seconds or as a time span; `0` to not wait. |
-| `DockerHost` | `DOCKER_HOST`, else the context | Docker Engine API endpoint, e.g., `tcp://build:2375`. |
-| `DockerContext` | `DOCKER_CONTEXT`, else the current | Docker CLI context, whose endpoint is read from the context store. |
+| `Project` | Compose project name | found by the project directory |
+| `ProjectDirectory` | Compose project directory, relative to the test assembly | closest `compose.yaml` |
+| `Container` | Name services use to reach the tests | `groundcontrol` |
+| `Image` | Image of the tests container | .NET image matching your tests |
+| `Network` | Network of the tests container | the one most services use |
+| `ReadinessTimeout` | How long to wait for the project, in seconds or `hh:mm:ss`; `0` skips the wait | 5 minutes |
+| `DockerHost` | Docker Engine endpoint, e.g., `tcp://build:2375` | `DOCKER_HOST` |
+| `DockerContext` | Docker CLI context to use | the current one |
 
 ## Debugging
 
-Debug the tests as usual: the test process in the container waits for a debugger, and the IDE is asked to attach.
+Start debugging as usual. The test process in the container waits for the debugger.
 
-- **Rider**: install `groundcontrol-rider-<version>.jar` from the [releases](https://github.com/vladislavtrayan/groundcontrol/releases) by *Settings → Plugins → ⚙ → Install Plugin from Disk* and restart Rider. Rider deploys its debugger tools into the container on the first attach; they are kept in the `groundcontrol-debugger-tools` Docker volume for the containers of later runs (remove it if attaching fails after a Rider upgrade).
-- **Other IDEs**: attach to the process in the container by hand; the run logs the container and process ID.
+- **Rider**: install the GroundControl plugin, `groundcontrol-rider-<version>.jar` from the [releases](https://github.com/vladislavtrayan/groundcontrol/releases), via *Settings → Plugins → ⚙ → Install Plugin from Disk*. Rider then attaches on its own. The first attach takes a little longer while Rider copies its debugger tools; they are kept in the `groundcontrol-debugger-tools` volume for next time. If attaching breaks after a Rider update, remove that volume.
+- **Other IDEs**: attach to the process by hand. The debug output shows the container and process ID.
 
 ## Development
 
-`dotnet test` runs the unit tests and, when Docker is available, the integration tests (trait `Category=Docker`), which run the sample project in `test/GroundControl.Tests.Sample` through GroundControl against its Compose project. `rider/build.ps1` builds the Rider plugin and installs it into the local Rider.
+`dotnet test` runs the unit tests and, if Docker is available, the integration tests against the sample project in `test/GroundControl.Tests.Sample`.
 
-Pushing a version tag such as `0.2.0` builds the package and the plugin, publishes the package to nuget.org and creates the GitHub release with both.
+`rider/build.ps1` builds the Rider plugin and installs it into your local Rider.
+
+Pushing a version tag such as `0.2.0` publishes the package to nuget.org and creates a GitHub release with the plugin.
 
 ## License
 
