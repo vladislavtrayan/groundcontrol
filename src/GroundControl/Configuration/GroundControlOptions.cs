@@ -29,14 +29,15 @@ public sealed record GroundControlOptions
     public string? ProjectDirectory { get; init; }
 
     /// <summary>
-    /// The name of the tests container as a service of the project (shared by the test runs in progress, as a host is), which services
-    /// reach the tests by; the tests are given it in <c>GROUNDCONTROL_CONTAINER</c>.
+    /// The service of the tests container, which the services reach the tests by (the tests are given it in <c>GROUNDCONTROL_CONTAINER</c>).
+    /// The test runs in progress share the container, as a host. If the project declares the service, its container runs the tests (kept up
+    /// with the project); otherwise, GroundControl creates one for the test runs and removes it after the last of them.
     /// </summary>
     public string Container { get; init; } = "groundcontrol";
 
     /// <summary>
-    /// The image of the tests container, with <c>sh</c> and <c>sleep</c> (as the .NET images have); by default, the .NET (or ASP.NET Core)
-    /// image of the test assembly runtime.
+    /// The image of the tests container GroundControl creates (not of a declared tests service), with <c>sh</c>, <c>sleep</c>, <c>cat</c>
+    /// and <c>rm</c> (as the .NET images have); by default, the .NET (or ASP.NET Core) image of the test assembly runtime.
     /// </summary>
     public string? Image { get; init; }
 

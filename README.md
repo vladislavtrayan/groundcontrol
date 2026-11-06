@@ -57,6 +57,31 @@ Two things to keep in mind:
 
 As on your machine, test projects running at the same time must not listen on the same port. Projects in parallel pipelines get their own container and don't affect each other.
 
+If a test run's host process dies, its tests are stopped within about 30 seconds, so they don't keep holding ports.
+
+## Keeping the tests container up with your project
+
+By default, the `groundcontrol` container only exists while tests run. Services that call your tests then can't resolve the name between runs, and lookups of a missing name can be slow (16 seconds on Docker Desktop for Windows).
+
+To keep it up, declare it as a service in your Compose file:
+
+```yaml
+services:
+  groundcontrol:
+    image: mcr.microsoft.com/dotnet/aspnet:10.0
+    command: [ "sleep", "infinity" ]
+    volumes:
+      - .:/workspace:ro
+```
+
+The name now resolves from `docker compose up` until `docker compose down`. GroundControl runs every test run in this container and never creates, replaces or removes it.
+
+A few rules for the service:
+
+- Use an image with the .NET runtime your tests target. GroundControl checks it before running and tells you which image to use.
+- Mount the directory that contains your test assemblies. Any path in the container works.
+- If it isn't running, GroundControl waits for it like any other service and then asks you to start it with `docker compose up -d groundcontrol`.
+
 ## Settings
 
 All settings are optional. Set them as assembly metadata in the test project:
@@ -74,8 +99,8 @@ Or as environment variables, which win over metadata: `GROUNDCONTROL_NETWORK=bac
 | `Project` | Compose project name | found by the project directory |
 | `ProjectDirectory` | Compose project directory, relative to the test assembly | closest `compose.yaml` |
 | `Container` | Name services use to reach the tests | `groundcontrol` |
-| `Image` | Image of the tests container; it needs `sh` and `sleep` | .NET image matching your tests |
-| `Network` | Network of the tests container | the one most services use |
+| `Image` | Image of the tests container GroundControl creates; it needs `sh` | .NET image matching your tests |
+| `Network` | Network of the tests container GroundControl creates | the one most services use |
 | `ReadinessTimeout` | How long to wait for the project, in seconds or `hh:mm:ss`; `0` skips the wait | 5 minutes |
 | `DockerHost` | Docker Engine endpoint, e.g., `tcp://build:2375` | `DOCKER_HOST` |
 | `DockerContext` | Docker CLI context to use | the current one |
@@ -84,7 +109,7 @@ Or as environment variables, which win over metadata: `GROUNDCONTROL_NETWORK=bac
 
 Start debugging as usual. The test process in the container waits for the debugger.
 
-- **Rider**: install the GroundControl plugin, `groundcontrol-rider-<version>.jar` from the [releases](https://github.com/vladislavtrayan/groundcontrol/releases), via *Settings → Plugins → ⚙ → Install Plugin from Disk*. Rider then attaches on its own. The first attach takes a little longer while Rider copies its debugger tools; they stay while the container runs, and the `groundcontrol-debugger-tools` volume keeps them for the next container. If attaching breaks after a Rider update, remove that volume.
+- **Rider**: install the GroundControl plugin, `groundcontrol-rider-<version>.jar` from the [releases](https://github.com/vladislavtrayan/groundcontrol/releases), via *Settings → Plugins → ⚙ → Install Plugin from Disk*. Rider then attaches on its own. The first attach takes a little longer while Rider copies its debugger tools; they stay while the container runs. For the container GroundControl creates, the `groundcontrol-debugger-tools` volume keeps them for the next one; if attaching breaks after a Rider update, remove that volume. A declared service keeps them anyway; mounting the same volume at `/root/.RiderDebuggerTools` there is optional, so they survive recreating it.
 - **Other IDEs**: attach to the process by hand. The debug output shows the container and process ID.
 
 ## Development

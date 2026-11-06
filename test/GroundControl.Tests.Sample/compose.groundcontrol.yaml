@@ -1,0 +1,8 @@
+# Declares the tests service (see DeclaredServiceTests): GroundControl runs the tests within its container, kept up with the project,
+# rather than in one of its own. The tests mount and image are variables, for the tests of the checks.
+services:
+  groundcontrol:
+    image: ${SAMPLE_TESTS_IMAGE:-mcr.microsoft.com/dotnet/runtime:8.0}
+    command: [ "sleep", "infinity" ]
+    volumes:
+      - ${SAMPLE_TESTS_MOUNT:-.}:/tests:ro

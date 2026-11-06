@@ -52,6 +52,10 @@ public class NetworkTests
         }
     }
 
+    // Runs long, until killed as its test host dies (see DeclaredServiceTests); explicit, as it waits.
+    [Fact(Explicit = true)]
+    public Task RunsLong() => Task.Delay(TimeSpan.FromMinutes(5), TestContext.Current.CancellationToken);
+
     // Waits for a service of the project to call the web server of the tests by the name of the tests container (see SampleProjectTests);
     // explicit, as it waits.
     [Fact(Explicit = true)]

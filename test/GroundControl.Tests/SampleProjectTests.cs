@@ -2,8 +2,10 @@ using Xunit;
 
 namespace GroundControl.Tests;
 
-// Runs GroundControl.Tests.Sample by GroundControl within its Docker Compose project, as test runners run test assemblies.
+// Runs GroundControl.Tests.Sample by GroundControl within its Docker Compose project, as test runners run test assemblies,
+// within the tests container GroundControl creates (the project does not declare the tests service).
 [Trait("Category", "Docker")]
+[Collection("Docker")]
 public class SampleProjectTests(SampleProject sample) : IClassFixture<SampleProject>
 {
     // Tests of GroundControl.Tests.Sample run by default (its explicit test is not).

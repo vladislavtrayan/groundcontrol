@@ -5,6 +5,7 @@ using System.Text.Json;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using GroundControl.Configuration;
+using Version = System.Version;
 
 namespace GroundControl.Docker;
 
@@ -95,13 +96,13 @@ internal sealed class DockerEngine : IDisposable
     }
 
     /// <summary>
-    /// Runs the command within the tests container (started if absent, see <see cref="StartAsync"/>), with the files written into it
-    /// by their paths, and reports the process ID of the command (written first to its standard error) and its output lines.
+    /// Runs the command within the tests container, with the files written into it by their paths, and reports the process ID
+    /// of the command (written first to its standard error) and its output lines.
     /// </summary>
     /// <returns>The exit code of the command and the end of its standard error.</returns>
     /// <remarks>
-    /// The test runs of the project share the container: once the last of them completes, the container is removed. The command is killed
-    /// on cancellation; if the test host dies, it runs to completion, and the container is removed by the next test run.
+    /// The test runs of the project share the container. A managed one is started if absent (see <see cref="StartAsync"/>) and removed
+    /// once the last test run completes; a declared one is kept as it is. The command is killed on cancellation.
     /// </remarks>
     public async Task<(long ExitCode, string Error)> RunAsync(
         TestContainer container,
@@ -111,15 +112,20 @@ internal sealed class DockerEngine : IDisposable
         Action<string> onOutput,
         CancellationToken cancellationToken)
     {
-        await this.PullImageAsync(container.Image, cancellationToken);
         string exec;
         MultiplexedStream stream;
-        using (await LockAsync(container.Name, cancellationToken))
+        if (container.Declared)
         {
-            await this.StartAsync(container, cancellationToken);
-            await this.client.Containers.ExtractArchiveToContainerAsync(container.Name, new ContainerPathStatParameters { Path = "/" }, Archive(files), cancellationToken);
-            exec = (await this.client.Exec.ExecCreateContainerAsync(container.Name, command, cancellationToken)).ID;
-            stream = await this.client.Exec.StartAndAttachContainerExecAsync(exec, false, cancellationToken);
+            (exec, stream) = await this.StartProcessAsync(container, command, files, cancellationToken);
+        }
+        else
+        {
+            await this.PullImageAsync(container.Image, cancellationToken);
+            using (await LockAsync(container.Name, cancellationToken))
+            {
+                await this.StartAsync(container, cancellationToken);
+                (exec, stream) = await this.StartProcessAsync(container, command, files, cancellationToken);
+            }
         }
 
         try
@@ -168,17 +174,77 @@ internal sealed class DockerEngine : IDisposable
         finally
         {
             stream.Dispose();
-            await this.ReleaseAsync(container, CancellationToken.None);
+            if (!container.Declared)
+            {
+                await this.ReleaseAsync(container, CancellationToken.None);
+            }
+        }
+    }
+
+    /// <summary>Writes the files (by their paths, creating their directories) into the container.</summary>
+    public Task WriteFilesAsync(string container, IReadOnlyDictionary<string, string> files, CancellationToken cancellationToken) =>
+        this.client.Containers.ExtractArchiveToContainerAsync(container, new ContainerPathStatParameters { Path = "/" }, Archive(files), cancellationToken);
+
+    /// <summary>
+    /// Checks that the declared tests container runs the tests: it has <c>sh</c>, which the test process is run by, and the runtimes
+    /// of the frameworks of the test assembly; otherwise, the image is suggested.
+    /// </summary>
+    public async Task CheckAsync(TestContainer container, IReadOnlyList<(string Name, Version Version)> frameworks, string image, CancellationToken cancellationToken)
+    {
+        if ((await this.ExecAsync(container.Name, ["sh", "-c", "exit 0"], cancellationToken)).ExitCode != 0)
+        {
+            throw new InvalidOperationException($"The {container.Service} service has no sh, which GroundControl runs the tests by: use an image with it, such as {image}.");
+        }
+
+        var runtimes = await this.ExecAsync(container.Name, ["sh", "-c", "dotnet --list-runtimes"], cancellationToken);
+        if (TestContainer.MissingFrameworks(frameworks, runtimes.Output) is { Count: > 0 } missing)
+        {
+            throw new InvalidOperationException($"The {container.Service} service has no {string.Join(" and ", missing)}: use {image}.");
         }
     }
 
     public void Dispose() => this.client.Dispose();
 
+    private async Task<(string Exec, MultiplexedStream Stream)> StartProcessAsync(
+        TestContainer container, ContainerExecCreateParameters command, IReadOnlyDictionary<string, string> files, CancellationToken cancellationToken)
+    {
+        await this.WriteFilesAsync(container.Name, files, cancellationToken);
+        var exec = (await this.client.Exec.ExecCreateContainerAsync(container.Name, command, cancellationToken)).ID;
+        return (exec, await this.client.Exec.StartAndAttachContainerExecAsync(exec, false, cancellationToken));
+    }
+
+    /// <summary>Runs the command within the container to completion.</summary>
+    /// <returns>Its exit code (-1 if it has not started, e.g., without its executable) and its standard output.</returns>
+    private async Task<(long ExitCode, string Output)> ExecAsync(string container, IList<string> command, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var exec = (await this.client.Exec.ExecCreateContainerAsync(
+                container, new ContainerExecCreateParameters { Cmd = command, AttachStdout = true, AttachStderr = true }, cancellationToken)).ID;
+            using var stream = await this.client.Exec.StartAndAttachContainerExecAsync(exec, false, cancellationToken);
+            var output = new StringBuilder();
+            var buffer = new byte[4096];
+            while (await stream.ReadOutputAsync(buffer, 0, buffer.Length, cancellationToken) is { EOF: false } read)
+            {
+                if (read.Target == MultiplexedStream.TargetStream.StandardOut)
+                {
+                    output.Append(Encoding.UTF8.GetString(buffer, 0, read.Count));
+                }
+            }
+
+            return ((await this.client.Exec.InspectContainerExecAsync(exec, cancellationToken)).ExitCode, output.ToString());
+        }
+        catch (DockerApiException)
+        {
+            return (-1, string.Empty);
+        }
+    }
+
     public static string? Label(IDictionary<string, string>? labels, string name) => labels is not null && labels.TryGetValue(name, out var value) ? value : null;
 
     /// <summary>
-    /// Starts the tests container unless it runs with the image and the project directory of the test run; otherwise, once no test run
-    /// is in progress within it, it is replaced (e.g., left over by a crashed test host, or of another runtime of the tests).
+    /// Starts the managed tests container unless it runs with the image and the project directory of the test run; otherwise, once no test run
+    /// is in progress within it, it is replaced (e.g., stopped, or of another runtime of the tests).
     /// </summary>
     private async Task StartAsync(TestContainer container, CancellationToken cancellationToken)
     {
