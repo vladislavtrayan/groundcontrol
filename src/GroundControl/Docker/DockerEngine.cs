@@ -94,53 +94,58 @@ internal sealed class DockerEngine : IDisposable
         return result;
     }
 
-    /// <summary>Removes the container, killing its process.</summary>
-    public async Task RemoveContainerAsync(string id, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await this.client.Containers.RemoveContainerAsync(id, new ContainerRemoveParameters { Force = true }, cancellationToken);
-        }
-        catch (DockerApiException e) when (e is DockerContainerNotFoundException || e.StatusCode == System.Net.HttpStatusCode.Conflict)
-        {
-            // Removed already, or being removed (AutoRemove).
-        }
-    }
-
     /// <summary>
-    /// Runs a container (pulling its image if absent) with the files, by their paths within the container, and reports the process ID
-    /// of its command and its output lines.
+    /// Runs the command within the tests container (started if absent, see <see cref="StartAsync"/>), with the files written into it
+    /// by their paths, and reports the process ID of the command (written first to its standard error) and its output lines.
     /// </summary>
-    /// <returns>The exit code of the container and the end of its standard error.</returns>
+    /// <returns>The exit code of the command and the end of its standard error.</returns>
     /// <remarks>
-    /// The container is removed once it exits, and killed on cancellation; if the test host dies, its command runs to completion first.
+    /// The test runs of the project share the container: once the last of them completes, the container is removed. The command is killed
+    /// on cancellation; if the test host dies, it runs to completion, and the container is removed by the next test run.
     /// </remarks>
     public async Task<(long ExitCode, string Error)> RunAsync(
-        CreateContainerParameters parameters,
+        TestContainer container,
+        ContainerExecCreateParameters command,
         IReadOnlyDictionary<string, string> files,
         Action<int> onStarted,
         Action<string> onOutput,
         CancellationToken cancellationToken)
     {
-        await this.PullImageAsync(parameters.Image, cancellationToken);
-        parameters.HostConfig.AutoRemove = true;
-        var id = (await this.client.Containers.CreateContainerAsync(parameters, cancellationToken)).ID;
+        await this.PullImageAsync(container.Image, cancellationToken);
+        string exec;
+        MultiplexedStream stream;
+        using (await LockAsync(container.Name, cancellationToken))
+        {
+            await this.StartAsync(container, cancellationToken);
+            await this.client.Containers.ExtractArchiveToContainerAsync(container.Name, new ContainerPathStatParameters { Path = "/" }, Archive(files), cancellationToken);
+            exec = (await this.client.Exec.ExecCreateContainerAsync(container.Name, command, cancellationToken)).ID;
+            stream = await this.client.Exec.StartAndAttachContainerExecAsync(exec, false, cancellationToken);
+        }
+
         try
         {
-            await this.client.Containers.ExtractArchiveToContainerAsync(id, new ContainerPathStatParameters { Path = "/" }, Archive(files), cancellationToken);
-
+            var processId = (int?)null;
             var errors = new List<string>();
             var output = new LineBuffer(onOutput);
-            var error = new LineBuffer(errors.Add);
-            using var stream = await this.client.Containers.AttachContainerAsync(
-                id, false, new ContainerAttachParameters { Stream = true, Stdout = true, Stderr = true }, cancellationToken);
-            await this.client.Containers.StartContainerAsync(id, new ContainerStartParameters(), cancellationToken);
-            await using var registration = cancellationToken.Register(() => _ = this.RemoveContainerAsync(id, CancellationToken.None));
-            var exit = this.client.Containers.WaitContainerAsync(id, CancellationToken.None);
-            if (await this.FindProcessAsync(id, parameters.Cmd[0], cancellationToken) is { } processId)
+            var error = new LineBuffer(line =>
             {
-                onStarted(processId);
-            }
+                if (processId is null && int.TryParse(line, out var started))
+                {
+                    processId = started;
+                    onStarted(started);
+                }
+                else
+                {
+                    errors.Add(line);
+                }
+            });
+            await using var registration = cancellationToken.Register(() =>
+            {
+                if (processId is { } running)
+                {
+                    _ = this.KillAsync(container.Name, running);
+                }
+            });
 
             var buffer = new byte[16384];
             try
@@ -157,51 +162,156 @@ internal sealed class DockerEngine : IDisposable
 
             output.Flush();
             error.Flush();
-            long exitCode;
-            try
-            {
-                exitCode = cancellationToken.IsCancellationRequested ? -1 : (await exit).StatusCode;
-            }
-            catch (DockerApiException)
-            {
-                exitCode = -1;
-            }
-
+            var exitCode = cancellationToken.IsCancellationRequested ? -1 : (await this.client.Exec.InspectContainerExecAsync(exec, CancellationToken.None)).ExitCode;
             return (exitCode, string.Join(Environment.NewLine, errors.TakeLast(50)));
         }
         finally
         {
-            await this.RemoveContainerAsync(id, CancellationToken.None);
+            stream.Dispose();
+            await this.ReleaseAsync(container, CancellationToken.None);
         }
     }
 
-    /// <summary>The process ID of the command of the container, found by its name in the process list once it runs.</summary>
-    private async Task<int?> FindProcessAsync(string id, string command, CancellationToken cancellationToken)
+    public void Dispose() => this.client.Dispose();
+
+    public static string? Label(IDictionary<string, string>? labels, string name) => labels is not null && labels.TryGetValue(name, out var value) ? value : null;
+
+    /// <summary>
+    /// Starts the tests container unless it runs with the image and the project directory of the test run; otherwise, once no test run
+    /// is in progress within it, it is replaced (e.g., left over by a crashed test host, or of another runtime of the tests).
+    /// </summary>
+    private async Task StartAsync(TestContainer container, CancellationToken cancellationToken)
     {
-        var name = Path.GetFileName(command);
-        for (var attempt = 0; attempt < 50; attempt++)
+        while (true)
         {
-            ContainerProcessesResponse processes;
+            var existing = await this.InspectAsync(container.Name, cancellationToken);
+            if (existing is null)
+            {
+                try
+                {
+                    await this.client.Containers.CreateContainerAsync(container.Create(), cancellationToken);
+                }
+                catch (DockerApiException e) when (e.StatusCode == System.Net.HttpStatusCode.Conflict)
+                {
+                    // Created meanwhile (by another host).
+                    continue;
+                }
+
+                await this.client.Containers.StartContainerAsync(container.Name, new ContainerStartParameters(), cancellationToken);
+                return;
+            }
+
+            if (container.Fits(existing))
+            {
+                if (existing.NetworkSettings?.Networks?.ContainsKey(container.Network) != true)
+                {
+                    await this.client.Networks.ConnectNetworkAsync(
+                        container.Network,
+                        new NetworkConnectParameters { Container = container.Name, EndpointConfig = new EndpointSettings { Aliases = [container.Service] } },
+                        cancellationToken);
+                }
+
+                return;
+            }
+
+            if (await this.CountRunningAsync(existing, cancellationToken) == 0)
+            {
+                await this.RemoveAsync(existing.ID, cancellationToken);
+                continue;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+    }
+
+    /// <summary>Removes the tests container once no test run is in progress within it.</summary>
+    private async Task ReleaseAsync(TestContainer container, CancellationToken cancellationToken)
+    {
+        using var @lock = await LockAsync(container.Name, cancellationToken);
+        if (await this.InspectAsync(container.Name, cancellationToken) is { } existing && await this.CountRunningAsync(existing, cancellationToken) == 0)
+        {
+            await this.RemoveAsync(existing.ID, cancellationToken);
+        }
+    }
+
+    /// <summary>The number of processes running within the container by docker exec (the test runs in progress).</summary>
+    private async Task<int> CountRunningAsync(ContainerInspectResponse container, CancellationToken cancellationToken)
+    {
+        var running = 0;
+        foreach (var exec in container.ExecIDs ?? [])
+        {
             try
             {
-                processes = await this.client.Containers.ListProcessesAsync(id, new ContainerListProcessesParameters { PsArgs = "-o pid,comm" }, cancellationToken);
+                if ((await this.client.Exec.InspectContainerExecAsync(exec, cancellationToken)).Running)
+                {
+                    running++;
+                }
             }
             catch (DockerApiException)
             {
-                return null;
+                // Completed meanwhile.
             }
-
-            var pid = processes.Titles.IndexOf("PID");
-            var comm = processes.Titles.IndexOf("COMMAND");
-            if (pid >= 0 && comm >= 0 && processes.Processes.FirstOrDefault(process => process[comm] == name) is { } process && int.TryParse(process[pid], out var processId))
-            {
-                return processId;
-            }
-
-            await Task.Delay(100, cancellationToken);
         }
 
-        return null;
+        return running;
+    }
+
+    private async Task<ContainerInspectResponse?> InspectAsync(string name, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await this.client.Containers.InspectContainerAsync(name, cancellationToken);
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    private async Task RemoveAsync(string id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await this.client.Containers.RemoveContainerAsync(id, new ContainerRemoveParameters { Force = true }, cancellationToken);
+        }
+        catch (DockerApiException e) when (e is DockerContainerNotFoundException || e.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            // Removed already, or being removed.
+        }
+    }
+
+    /// <summary>Kills the process within the container (by the kill of its shell, as the image may not have a kill executable).</summary>
+    private async Task KillAsync(string container, int processId)
+    {
+        try
+        {
+            var exec = await this.client.Exec.ExecCreateContainerAsync(container, new ContainerExecCreateParameters { Cmd = ["sh", "-c", $"kill {processId}"] });
+            await this.client.Exec.StartContainerExecAsync(exec.ID);
+        }
+        catch (DockerApiException)
+        {
+            // The container has been removed.
+        }
+    }
+
+    /// <summary>
+    /// The lock of the tests container among the test processes of the host (a file opened exclusively), so a test run does not remove
+    /// the container while another one is starting within it.
+    /// </summary>
+    private static async Task<IDisposable> LockAsync(string container, CancellationToken cancellationToken)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{container}.lock");
+        while (true)
+        {
+            try
+            {
+                return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                await Task.Delay(100, cancellationToken);
+            }
+        }
     }
 
     private static MemoryStream Archive(IReadOnlyDictionary<string, string> files)
@@ -218,10 +328,6 @@ internal sealed class DockerEngine : IDisposable
         archive.Position = 0;
         return archive;
     }
-
-    public void Dispose() => this.client.Dispose();
-
-    public static string? Label(IDictionary<string, string>? labels, string name) => labels is not null && labels.TryGetValue(name, out var value) ? value : null;
 
     private async Task PullImageAsync(string image, CancellationToken cancellationToken)
     {
@@ -251,7 +357,7 @@ internal sealed class DockerEngine : IDisposable
     /// <summary>The context store writes named pipes as <c>npipe:////./pipe/name</c>, while the client reads <c>npipe://./pipe/name</c>.</summary>
     private static string Normalize(string endpoint) => endpoint.Replace("npipe:////./", "npipe://./", StringComparison.Ordinal);
 
-    private static bool SamePath(string path, string other) =>
+    internal static bool SamePath(string path, string other) =>
         string.Equals(
             Path.TrimEndingDirectorySeparator(path),
             Path.TrimEndingDirectorySeparator(other),

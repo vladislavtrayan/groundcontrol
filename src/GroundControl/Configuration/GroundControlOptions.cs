@@ -29,21 +29,23 @@ public sealed record GroundControlOptions
     public string? ProjectDirectory { get; init; }
 
     /// <summary>
-    /// The name of the tests container as a service of the project (one test run at a time), which services reach the tests by;
-    /// the tests are given it in <c>GROUNDCONTROL_CONTAINER</c>.
+    /// The name of the tests container as a service of the project (shared by the test runs in progress, as a host is), which services
+    /// reach the tests by; the tests are given it in <c>GROUNDCONTROL_CONTAINER</c>.
     /// </summary>
     public string Container { get; init; } = "groundcontrol";
 
-    /// <summary>The image of the tests container; by default, the .NET (or ASP.NET Core) image of the test assembly runtime.</summary>
+    /// <summary>
+    /// The image of the tests container, with <c>sh</c> and <c>sleep</c> (as the .NET images have); by default, the .NET (or ASP.NET Core)
+    /// image of the test assembly runtime.
+    /// </summary>
     public string? Image { get; init; }
 
     /// <summary>The network of the tests container; by default, the one most services of the project are on.</summary>
     public string? Network { get; init; }
 
     /// <summary>
-    /// How long to wait for the project to be ready: every service healthy (or running if it has no healthcheck), one-off services
-    /// (e.g., migrations) completed successfully, and no other test run in progress. Seconds, or a time span (e.g., <c>00:05:00</c>);
-    /// <c>0</c> not to wait.
+    /// How long to wait for the project to be ready: every service healthy (or running if it has no healthcheck), and one-off services
+    /// (e.g., migrations) completed successfully. Seconds, or a time span (e.g., <c>00:05:00</c>); <c>0</c> not to wait.
     /// </summary>
     public TimeSpan ReadinessTimeout { get; init; } = TimeSpan.FromMinutes(5);
 

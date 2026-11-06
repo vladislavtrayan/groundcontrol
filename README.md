@@ -38,7 +38,9 @@ You need .NET 8 or later, xUnit.net v3, and Docker.
 
 ## How it works
 
-Each test run gets its own short-lived container on your project's network. The test assembly runs inside it, and the results come back to your runner as if the tests ran locally. The container is removed when the run ends.
+GroundControl adds a `groundcontrol` container to your project's network and runs your test assembly inside it. The results come back to your runner as if the tests ran locally.
+
+Test runs share that container, the way they would share your machine: when several test projects run at once, they all run in it side by side. The container is removed when the last run ends.
 
 Your project directory is mounted read-only into the container, so tests can read files from it.
 
@@ -53,7 +55,7 @@ Two things to keep in mind:
 - Listen on all interfaces (`http://*:8080` or `0.0.0.0`), not on `localhost`.
 - Read the name from the `GROUNDCONTROL_CONTAINER` environment variable rather than hard-coding it.
 
-Because the name must point to one container, runs of the same project take turns. Projects in parallel pipelines don't affect each other.
+As on your machine, test projects running at the same time must not listen on the same port. Projects in parallel pipelines get their own container and don't affect each other.
 
 ## Settings
 
@@ -72,7 +74,7 @@ Or as environment variables, which win over metadata: `GROUNDCONTROL_NETWORK=bac
 | `Project` | Compose project name | found by the project directory |
 | `ProjectDirectory` | Compose project directory, relative to the test assembly | closest `compose.yaml` |
 | `Container` | Name services use to reach the tests | `groundcontrol` |
-| `Image` | Image of the tests container | .NET image matching your tests |
+| `Image` | Image of the tests container; it needs `sh` and `sleep` | .NET image matching your tests |
 | `Network` | Network of the tests container | the one most services use |
 | `ReadinessTimeout` | How long to wait for the project, in seconds or `hh:mm:ss`; `0` skips the wait | 5 minutes |
 | `DockerHost` | Docker Engine endpoint, e.g., `tcp://build:2375` | `DOCKER_HOST` |
@@ -82,7 +84,7 @@ Or as environment variables, which win over metadata: `GROUNDCONTROL_NETWORK=bac
 
 Start debugging as usual. The test process in the container waits for the debugger.
 
-- **Rider**: install the GroundControl plugin, `groundcontrol-rider-<version>.jar` from the [releases](https://github.com/vladislavtrayan/groundcontrol/releases), via *Settings → Plugins → ⚙ → Install Plugin from Disk*. Rider then attaches on its own. The first attach takes a little longer while Rider copies its debugger tools; they are kept in the `groundcontrol-debugger-tools` volume for next time. If attaching breaks after a Rider update, remove that volume.
+- **Rider**: install the GroundControl plugin, `groundcontrol-rider-<version>.jar` from the [releases](https://github.com/vladislavtrayan/groundcontrol/releases), via *Settings → Plugins → ⚙ → Install Plugin from Disk*. Rider then attaches on its own. The first attach takes a little longer while Rider copies its debugger tools; they stay while the container runs, and the `groundcontrol-debugger-tools` volume keeps them for the next container. If attaching breaks after a Rider update, remove that volume.
 - **Other IDEs**: attach to the process by hand. The debug output shows the container and process ID.
 
 ## Development

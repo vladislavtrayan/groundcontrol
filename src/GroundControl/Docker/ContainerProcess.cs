@@ -19,9 +19,11 @@ internal static class ContainerProcess
         Action<string> onOutput,
         CancellationToken cancellationToken)
     {
-        const string inputLinesPath = "/tmp/groundcontrol/input.txt";
+        // The test runs share the container, so each has a file of its own.
+        var inputLinesPath = $"/tmp/groundcontrol/{Guid.NewGuid():N}.txt";
         var (_, error) = await docker.RunAsync(
-            container.Create(assemblyPath[..assemblyPath.LastIndexOf('/')], ["dotnet", assemblyPath, .. arguments], [$"{inputLinesVariable}={inputLinesPath}"]),
+            container,
+            container.Exec(assemblyPath[..assemblyPath.LastIndexOf('/')], ["dotnet", assemblyPath, .. arguments], [$"{inputLinesVariable}={inputLinesPath}"]),
             new Dictionary<string, string> { [inputLinesPath] = string.Concat(inputLines.Select(line => line + '\n')) },
             onStarted,
             onOutput,

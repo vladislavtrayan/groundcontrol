@@ -38,7 +38,7 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
 
     /// <summary>
     /// The container for the test run on the network of the project (the one most services are on, the default network of the project),
-    /// once the project is ready and no other test run is in progress.
+    /// once the project is ready.
     /// </summary>
     public async Task<TestContainer> GetTestContainerAsync(string assemblyPath, CancellationToken cancellationToken)
     {
@@ -63,9 +63,7 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
     /// Waits until the services of the project are healthy and its one-off services (e.g., migrations) have completed, as services do not
     /// wait for each other: Docker Compose dependency conditions disable debugging of services in IDEs.
     /// </summary>
-    /// <remarks>
-    /// Test runs of the project run one at a time: the services reach the tests container by the service name, so there is one.
-    /// </remarks>
+    /// <remarks>The tests container is not a service to wait for: test runs in progress share it.</remarks>
     private async Task WaitUntilReadyAsync(List<ComposeContainer> containers, CancellationToken cancellationToken)
     {
         if (options.ReadinessTimeout <= TimeSpan.Zero)
@@ -76,9 +74,8 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
         var deadline = DateTime.UtcNow + options.ReadinessTimeout;
         while (true)
         {
-            var tests = containers.Where(container => container.Service == options.Container).ToList();
-            var waiting = containers.Except(tests).Where(container => !container.IsReady).ToList();
-            if (waiting.Count == 0 && tests.Count == 0)
+            var waiting = containers.Where(container => container.Service != options.Container && !container.IsReady).ToList();
+            if (waiting.Count == 0)
             {
                 return;
             }
@@ -87,7 +84,7 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
             if (failed.Count > 0 || DateTime.UtcNow > deadline)
             {
                 throw new InvalidOperationException(
-                    $"Docker Compose project in {directory} is not ready: {string.Join(", ", (failed.Count > 0 ? failed : waiting.Concat(tests)).Select(container => $"{container.Name} ({container.Status})"))}.");
+                    $"Docker Compose project in {directory} is not ready: {string.Join(", ", (failed.Count > 0 ? failed : waiting).Select(container => $"{container.Name} ({container.Status})"))}.");
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);

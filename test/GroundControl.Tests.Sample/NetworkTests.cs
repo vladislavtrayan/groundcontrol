@@ -37,6 +37,21 @@ public class NetworkTests
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
+    // Waits for the other two test runs started together to run within the same tests container, each leaving a file in it
+    // (see SampleProjectTests); explicit, as it waits.
+    [Fact(Explicit = true)]
+    public async Task MeetsOtherRuns()
+    {
+        var meeting = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "groundcontrol-meeting"));
+        File.WriteAllText(Path.Combine(meeting.FullName, Guid.NewGuid().ToString("N")), string.Empty);
+        var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(1);
+        while (meeting.GetFiles().Length < 3)
+        {
+            Assert.True(DateTime.UtcNow < deadline, $"{meeting.GetFiles().Length} of 3 test runs have met within the tests container.");
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
+    }
+
     // Waits for a service of the project to call the web server of the tests by the name of the tests container (see SampleProjectTests);
     // explicit, as it waits.
     [Fact(Explicit = true)]

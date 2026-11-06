@@ -1,3 +1,4 @@
+using Docker.DotNet.Models;
 using GroundControl.Docker;
 using Xunit;
 
@@ -45,28 +46,62 @@ public class TestContainerTests
     }
 
     [Fact]
-    public void RunsWithinProjectOnNetworkByName()
+    public void CreatesContainerOfProjectOnNetworkByName()
     {
         var container = new TestContainer("sample", "groundcontrol", "mcr.microsoft.com/dotnet/runtime:8.0", "sample_default", Project);
 
-        var parameters = container.Create("/workspace/bin", ["dotnet", "/workspace/bin/Tests.dll"], ["TESTS=/tmp/tests.txt"]);
+        var parameters = container.Create();
 
-        Assert.Matches("^sample-groundcontrol-run-[0-9a-f]{8}$", container.Name);
+        Assert.Equal("sample-groundcontrol-1", container.Name);
         Assert.Equal(container.Name, parameters.Name);
         Assert.Equal("mcr.microsoft.com/dotnet/runtime:8.0", parameters.Image);
-        Assert.Equal(["dotnet", "/workspace/bin/Tests.dll"], parameters.Cmd);
-        Assert.Equal("/workspace/bin", parameters.WorkingDir);
+        Assert.Equal(["sleep", "infinity"], parameters.Cmd);
         Assert.Equal("groundcontrol", parameters.Hostname);
-        Assert.Equal(["GROUNDCONTROL_CONTAINER=groundcontrol", "TESTS=/tmp/tests.txt"], parameters.Env);
         Assert.Equal("sample", parameters.Labels["com.docker.compose.project"]);
         Assert.Equal("groundcontrol", parameters.Labels["com.docker.compose.service"]);
-        Assert.Equal("True", parameters.Labels["com.docker.compose.oneoff"]);
-        Assert.True(parameters.AttachStdout && parameters.AttachStderr && !parameters.Tty && !parameters.OpenStdin);
+        Assert.Equal(Project, parameters.Labels["com.docker.compose.project.working_dir"]);
+        Assert.Equal("False", parameters.Labels["com.docker.compose.oneoff"]);
         Assert.True(parameters.HostConfig.Init);
         Assert.Equal(["groundcontrol"], Assert.Single(parameters.NetworkingConfig.EndpointsConfig, endpoint => endpoint.Key == "sample_default").Value.Aliases);
         Assert.Collection(
             parameters.HostConfig.Mounts,
             mount => Assert.Equal(("bind", Project, "/workspace", true), (mount.Type, mount.Source, mount.Target, mount.ReadOnly)),
             mount => Assert.Equal(("volume", "groundcontrol-debugger-tools", "/root/.RiderDebuggerTools", false), (mount.Type, mount.Source, mount.Target, mount.ReadOnly)));
+    }
+
+    // The process ID reported is the one within the container (the shell's, replaced by the command), which the debugger attaches to.
+    [Fact]
+    public void RunsWithinContainerReportingProcessId()
+    {
+        var container = new TestContainer("sample", "groundcontrol", "image", "sample_default", Project);
+
+        var parameters = container.Exec("/workspace/bin", ["dotnet", "/workspace/bin/Tests.dll"], ["TESTS=/tmp/tests.txt"]);
+
+        Assert.Equal(["sh", "-c", "echo $$ >&2; exec \"$@\"", "sh", "dotnet", "/workspace/bin/Tests.dll"], parameters.Cmd);
+        Assert.Equal(["GROUNDCONTROL_CONTAINER=groundcontrol", "TESTS=/tmp/tests.txt"], parameters.Env);
+        Assert.Equal("/workspace/bin", parameters.WorkingDir);
+        Assert.True(parameters.AttachStdout && parameters.AttachStderr && !parameters.Tty && !parameters.AttachStdin);
+    }
+
+    // An existing container serves the test run if it runs with the image and the project directory; otherwise it is replaced.
+    [Theory]
+    [InlineData(true, "image", true)]
+    [InlineData(false, "image", false)]
+    [InlineData(true, "other-image", false)]
+    public void FitsRunningContainerOfImageAndProject(bool running, string image, bool fits)
+    {
+        var container = new TestContainer("sample", "groundcontrol", "image", "sample_default", Project);
+        var existing = new ContainerInspectResponse
+        {
+            State = new ContainerState { Running = running },
+            Config = new Config { Image = image, Labels = new Dictionary<string, string> { ["com.docker.compose.project.working_dir"] = Project } },
+        };
+
+        Assert.Equal(fits, container.Fits(existing));
+        Assert.False(container.Fits(new ContainerInspectResponse
+        {
+            State = new ContainerState { Running = true },
+            Config = new Config { Image = "image", Labels = new Dictionary<string, string> { ["com.docker.compose.project.working_dir"] = Path.Combine(Project, "other") } },
+        }));
     }
 }
