@@ -40,10 +40,15 @@ internal static class ContainerProcess
             "bash", "-c", script.ReplaceLineEndings("\n"), "bash", assemblyPath, .. arguments,
         ];
 
-        await using var registration = cancellationToken.Register(
-            () => _ = docker.RunAsync(container.Stop(), [], _ => { }, CancellationToken.None, throwOnError: false));
+        var processId = (int?)null;
+        await using var registration = cancellationToken.Register(() =>
+        {
+            if (container.Stop(processId) is { } stop)
+            {
+                _ = docker.RunAsync(stop, [], _ => { }, CancellationToken.None, throwOnError: false);
+            }
+        });
 
-        var started = false;
         return await docker.RunAsync(
             command,
             [.. inputLines, string.Empty],
@@ -51,10 +56,10 @@ internal static class ContainerProcess
             cancellationToken,
             line =>
             {
-                if (!started && int.TryParse(line, out var processId))
+                if (processId is null && int.TryParse(line, out var remoteProcessId))
                 {
-                    started = true;
-                    onStarted(processId);
+                    processId = remoteProcessId;
+                    onStarted(remoteProcessId);
                     return true;
                 }
 

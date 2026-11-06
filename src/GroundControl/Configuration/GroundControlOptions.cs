@@ -20,10 +20,14 @@ public sealed record GroundControlOptions
     // containing a Compose file.
     public string? ProjectDirectory { get; init; }
 
-    // Image of the tests containers; by default, the .NET (or ASP.NET Core) image of the test assembly runtime.
+    // Docker Compose service running the tests if the project has one (kept running: the test runs of every test assembly run within it,
+    // and services reach the tests by its name); otherwise, the name of the container created for the test run on the network of the project.
+    public string Service { get; init; } = "groundcontrol";
+
+    // Image of the containers created for test runs; by default, the .NET (or ASP.NET Core) image of the test assembly runtime.
     public string? Image { get; init; }
 
-    // Network of the tests containers; by default, the one most services of the project are on.
+    // Network of the containers created for test runs; by default, the one most services of the project are on.
     public string? Network { get; init; }
 
     // How long to wait for the project to be ready (every service healthy, or running if it has no healthcheck, and one-off services,
@@ -59,6 +63,7 @@ public sealed record GroundControlOptions
         {
             Project = Get(nameof(Project)),
             ProjectDirectory = Get(nameof(ProjectDirectory)),
+            Service = Get(nameof(Service)) ?? defaults.Service,
             Image = Get(nameof(Image)),
             Network = Get(nameof(Network)),
             ReadinessTimeout = Get(nameof(ReadinessTimeout)) is { } timeout

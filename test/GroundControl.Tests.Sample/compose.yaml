@@ -7,3 +7,11 @@ services:
       test: [ "CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/" ]
       interval: 2s
       retries: 30
+
+  # The tests run within it (see GroundControl.Service), with the test assembly mounted.
+  groundcontrol:
+    image: mcr.microsoft.com/dotnet/runtime:8.0
+    command: sleep infinity
+    init: true
+    volumes:
+      - .:/workspace:ro

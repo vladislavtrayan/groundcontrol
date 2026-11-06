@@ -28,7 +28,21 @@ Requirements: .NET 8 or later, xUnit.net v3 2.0 or later, and the Docker CLI wit
 
 ## How it works
 
-For each test run, GroundControl starts a container on the project network with the project directory mounted read-only, and runs the same test assembly in it with the test cases the runner asked for. Results come back as those of the local test cases, so IDEs and `dotnet test` work as usual. The container is removed when the run ends.
+GroundControl runs the same test assembly inside the project with the test cases the runner asked for, and reports the results as those of the local test cases, so IDEs and `dotnet test` work as usual.
+
+The tests run in the container of the `groundcontrol` service when the project defines one: it is kept running, every run of every test assembly executes in it, and the other services reach the tests by that name (e.g., a web server hosted by a test fixture). Such a service needs the runtime of the tests, `bash`, and the directory of the test assemblies mounted:
+
+```yaml
+services:
+  groundcontrol:
+    image: mcr.microsoft.com/dotnet/runtime:8.0
+    command: sleep infinity
+    init: true
+    volumes:
+      - .:/workspace:ro
+```
+
+Without the service, each run gets its own container on the project network, with the project directory mounted read-only, known to the services as `groundcontrol` too, and removed when the run ends. Either way, the tests find their name in the `GROUNDCONTROL_SERVICE` environment variable.
 
 ## Settings
 
@@ -38,8 +52,9 @@ Optional, as assembly metadata (`<AssemblyMetadata Include="GroundControl.Networ
 | --- | --- | --- |
 | `Project` | resolved by Compose | Compose project name. |
 | `ProjectDirectory` | closest Compose file | Compose project directory, relative to the test assembly. |
-| `Image` | .NET or ASP.NET Core image of the test runtime | Image of the tests container; it needs `bash`, as the default .NET images have (Alpine and chiseled ones do not). |
-| `Network` | the one most services are on | Network of the tests container. |
+| `Service` | `groundcontrol` | Compose service running the tests, if the project has one; otherwise, the name of the per-run container on the network. |
+| `Image` | .NET or ASP.NET Core image of the test runtime | Image of the per-run container; it needs `bash`, as the default .NET images have (Alpine and chiseled ones do not). |
+| `Network` | the one most services are on | Network of the per-run container. |
 | `ReadinessTimeout` | 5 minutes | How long to wait for every service to be healthy (or running, without a healthcheck) and one-off services to complete, in seconds or as a time span; `0` to not wait. |
 | `Docker` | `docker` | Docker CLI executable. |
 | `DockerContext` | current | Docker context. |
@@ -48,7 +63,7 @@ Optional, as assembly metadata (`<AssemblyMetadata Include="GroundControl.Networ
 
 Debug the tests as usual: the test process in the container waits for a debugger, and the IDE is asked to attach.
 
-- **Rider**: install `groundcontrol-rider-<version>.jar` from the [releases](https://github.com/vladislavtrayan/groundcontrol/releases) by *Settings → Plugins → ⚙ → Install Plugin from Disk* and restart Rider. Rider deploys its debugger tools into the container on the first attach; they are kept in the `groundcontrol-debugger-tools` Docker volume for later runs (remove it if attaching fails after a Rider upgrade).
+- **Rider**: install `groundcontrol-rider-<version>.jar` from the [releases](https://github.com/vladislavtrayan/groundcontrol/releases) by *Settings → Plugins → ⚙ → Install Plugin from Disk* and restart Rider. Rider deploys its debugger tools into the container on the first attach; for per-run containers, they are kept in the `groundcontrol-debugger-tools` Docker volume (remove it if attaching fails after a Rider upgrade).
 - **Other IDEs**: attach to the process in the container by hand; the run logs the container and process ID.
 
 ## Development

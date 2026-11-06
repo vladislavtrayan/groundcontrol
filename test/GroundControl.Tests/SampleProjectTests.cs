@@ -2,19 +2,24 @@ using Xunit;
 
 namespace GroundControl.Tests;
 
-// Runs GroundControl.Tests.Sample by GroundControl within its Docker Compose project, as test runners run test assemblies.
+// Runs GroundControl.Tests.Sample by GroundControl within its Docker Compose project, as test runners run test assemblies:
+// within the groundcontrol service of the project by default, or within a container created for the run (named tests) when the service is not.
 [Trait("Category", "Docker")]
 public class SampleProjectTests(SampleProject sample) : IClassFixture<SampleProject>
 {
     // Tests of GroundControl.Tests.Sample run by default (its explicit test is not).
-    private const int Tests = 8;
+    private const int Tests = 9;
+
+    private static readonly Dictionary<string, string> TransientContainer = new() { ["GROUNDCONTROL_SERVICE"] = "tests" };
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task RunsTestsWithinContainer(bool preEnumerateTheories)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RunsTestsWithinContainer(bool transientContainer, bool preEnumerateTheories)
     {
-        var run = await sample.RunAsync(preEnumerateTheories ? ["-preEnumerateTheories"] : []);
+        var run = await sample.RunAsync(preEnumerateTheories ? ["-preEnumerateTheories"] : [], transientContainer ? TransientContainer : null);
 
         Assert.Equal(0, run.ExitCode);
         Assert.Empty(run.Of("error"));
@@ -62,7 +67,7 @@ public class SampleProjectTests(SampleProject sample) : IClassFixture<SampleProj
     [Fact]
     public async Task ReportsTestsNotRunAsFailed()
     {
-        var run = await sample.RunAsync([], new Dictionary<string, string> { ["GROUNDCONTROL_NETWORK"] = "missing" });
+        var run = await sample.RunAsync([], new Dictionary<string, string>(TransientContainer) { ["GROUNDCONTROL_NETWORK"] = "missing" });
 
         Assert.NotEmpty(run.Of("error"));
         Assert.Empty(run.Of("test-passed"));
