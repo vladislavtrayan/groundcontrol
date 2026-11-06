@@ -37,28 +37,38 @@ public class SampleProjectTests(SampleProject sample) : IClassFixture<SampleProj
         Assert.Empty((await sample.DockerAsync("ps", "--all", "--filter", "label=com.docker.compose.service=groundcontrol", "--format", "{{.Names}}")).Output);
     }
 
-    // The services of the project reach the tests container by its name while a run is in progress.
+    // The services of the project call the tests by the name of the tests container: the sample test waits for the call of the web service,
+    // so the run is in progress until the call reaches it.
     [Fact]
-    public async Task IsReachedByNameFromServices()
+    public async Task IsCalledByNameFromServices()
     {
-        var run = sample.RunAsync(["-method", "GroundControl.Tests.Sample.NetworkTests.IsReachedByName"]);
-        var resolution = await ResolveAsync("groundcontrol", run);
+        var run = sample.RunAsync(["-method", "GroundControl.Tests.Sample.NetworkTests.IsCalledByService", "-explicit", "only"]);
+        var call = await this.CallAsync("http://groundcontrol:8080/", run);
 
-        Assert.Equal(0, (await run).ExitCode);
-        Assert.True(resolution.ExitCode == 0, $"groundcontrol is not resolved by the web service:{Environment.NewLine}{resolution.Error}");
+        var result = await run;
+        Assert.True(
+            call.ExitCode == 0,
+            $"The web service has not called the tests:{Environment.NewLine}{string.Join(Environment.NewLine, call.Output)}{Environment.NewLine}{call.Error}");
+        Assert.Equal(0, result.ExitCode);
+        Assert.Single(result.Of("test-passed"));
     }
 
-    // Resolves the name by the web service while the run is in progress (the tests container exists once the run has started).
-    private async Task<(int ExitCode, List<string> Output, string Error)> ResolveAsync(string name, Task<SampleRun> run)
+    // Calls the URL from the web service until it succeeds or the run completes (the tests container exists once the run has started).
+    private async Task<(int ExitCode, List<string> Output, string Error)> CallAsync(string url, Task<SampleRun> run)
     {
-        var resolution = (ExitCode: -1, Output: new List<string>(), Error: "The run has completed before the name was resolved.");
-        while (!run.IsCompleted && resolution.ExitCode != 0)
+        var call = (ExitCode: -1, Output: new List<string>(), Error: "The run has completed before the call.");
+        while (!run.IsCompleted)
         {
-            resolution = await sample.DockerAsync("exec", "groundcontrol-sample-web-1", "nslookup", name);
+            call = await sample.DockerAsync("exec", "groundcontrol-sample-web-1", "wget", "-q", "-O", "/dev/null", "-T", "2", url);
+            if (call.ExitCode == 0)
+            {
+                break;
+            }
+
             await Task.Delay(200, TestContext.Current.CancellationToken);
         }
 
-        return resolution;
+        return call;
     }
 
     [Fact]

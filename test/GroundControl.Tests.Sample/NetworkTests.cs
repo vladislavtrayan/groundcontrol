@@ -36,4 +36,17 @@ public class NetworkTests
         using var response = await request;
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
+
+    // Waits for a service of the project to call the web server of the tests by the name of the tests container (see SampleProjectTests);
+    // explicit, as it waits.
+    [Fact(Explicit = true)]
+    public async Task IsCalledByService()
+    {
+        using var listener = new HttpListener();
+        listener.Prefixes.Add("http://*:8080/");
+        listener.Start();
+        var context = await listener.GetContextAsync().WaitAsync(TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
+        context.Response.StatusCode = (int)HttpStatusCode.NoContent;
+        context.Response.Close();
+    }
 }
