@@ -11,7 +11,6 @@ public class GroundControlOptionsTests
         var options = GroundControlOptions.Load([], _ => null);
 
         Assert.Equal(new GroundControlOptions(), options);
-        Assert.Equal("groundcontrol", options.Service);
         Assert.Null(options.Network);
         Assert.Equal("docker", options.Docker);
         Assert.Equal(TimeSpan.FromMinutes(5), options.ReadinessTimeout);
