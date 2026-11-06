@@ -31,14 +31,15 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
             : throw new InvalidOperationException($"Docker Compose file ({string.Join(", ", ComposeFiles)}) is not found in directories of {assemblyPath}.");
     }
 
-    // The tests container of the project (not started), on the network of the project (the one most services are on, the default network
-    // of the project), once the project is ready.
+    // The container for the test run on the network of the project (the one most services are on, the default network of the project),
+    // once the project is ready and no other test run is in progress.
     public async Task<TestContainer> GetTestContainerAsync(string assemblyPath, CancellationToken cancellationToken)
     {
         var containers = await this.GetContainersAsync(cancellationToken);
         var running = containers.Where(container => container.State == "running").ToList();
         var network = options.Network
             ?? running
+                .Where(container => container.Service != options.Container)
                 .SelectMany(container => container.Networks.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 .GroupBy(name => name)
                 .OrderByDescending(group => group.Count())
@@ -53,6 +54,7 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
 
     // Waits until the services of the project are healthy and its one-off services (e.g., migrations) have completed,
     // as services do not wait for each other: Docker Compose dependency conditions disable debugging of services in IDEs.
+    // Test runs of the project run one at a time: the services reach the tests container by the service name, so there is one.
     private async Task WaitUntilReadyAsync(List<ComposeContainer> containers, CancellationToken cancellationToken)
     {
         if (options.ReadinessTimeout <= TimeSpan.Zero)
@@ -63,8 +65,9 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
         var deadline = DateTime.UtcNow + options.ReadinessTimeout;
         while (true)
         {
-            var waiting = containers.Where(container => !container.IsReady).ToList();
-            if (waiting.Count == 0)
+            var tests = containers.Where(container => container.Service == options.Container).ToList();
+            var waiting = containers.Except(tests).Where(container => !container.IsReady).ToList();
+            if (waiting.Count == 0 && tests.Count == 0)
             {
                 return;
             }
@@ -73,7 +76,7 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
             if (failed.Count > 0 || DateTime.UtcNow > deadline)
             {
                 throw new InvalidOperationException(
-                    $"Docker Compose project in {directory} is not ready: {string.Join(", ", (failed.Count > 0 ? failed : waiting).Select(container => $"{container.Name} ({container.Status})"))}.");
+                    $"Docker Compose project in {directory} is not ready: {string.Join(", ", (failed.Count > 0 ? failed : waiting.Concat(tests)).Select(container => $"{container.Name} ({container.Status})"))}.");
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
@@ -89,7 +92,7 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
 }
 
 // A container of the Docker Compose project (docker compose ps --format json).
-internal sealed record ComposeContainer(string Id, string Name, string Project, string State, string Health, int ExitCode, string Status, string Networks)
+internal sealed record ComposeContainer(string Id, string Name, string Project, string Service, string State, string Health, int ExitCode, string Status, string Networks)
 {
     // Healthy, running without a healthcheck, or completed successfully (one-off services).
     public bool IsReady =>
@@ -113,6 +116,7 @@ internal sealed record ComposeContainer(string Id, string Name, string Project, 
         Get(json, "ID"),
         Get(json, "Name"),
         Get(json, "Project"),
+        Get(json, "Service"),
         Get(json, "State"),
         Get(json, "Health"),
         json.TryGetProperty("ExitCode", out var exitCode) && exitCode.ValueKind == JsonValueKind.Number ? exitCode.GetInt32() : 0,

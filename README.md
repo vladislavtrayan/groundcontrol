@@ -30,7 +30,7 @@ Requirements: .NET 8 or later, xUnit.net v3 2.0 or later, and the Docker CLI wit
 
 GroundControl runs the same test assembly inside the project with the test cases the runner asked for, and reports the results as those of the local test cases, so IDEs and `dotnet test` work as usual.
 
-The tests run in a container GroundControl adds to the project as the `groundcontrol` service, on the project network: the services reach the tests by that name (e.g., a web server hosted by a test fixture), which the tests find in the `GROUNDCONTROL_CONTAINER` environment variable. The container runs the .NET image of the test runtime with the project directory mounted read-only. It is created by the first test run, shared by the runs in progress (of any test assembly), and dropped by the last of them, so projects of parallel pipelines do not interfere and `docker compose down` finds nothing of it.
+Each test run gets a container of its own, added to the project as a one-off of the `groundcontrol` service on the project network and removed when the run ends. The services reach the tests by that name (e.g., a web server hosted by a test fixture, which must listen on all interfaces, not on localhost), which the tests find in the `GROUNDCONTROL_CONTAINER` environment variable; for the name to point at one container, test runs of a project run one at a time, a run waiting for the one in progress. The container runs the .NET image of the test runtime with the project directory mounted read-only. Projects of parallel pipelines do not interfere, and `docker compose down` finds nothing of the tests.
 
 ## Settings
 
@@ -40,10 +40,10 @@ Optional, as assembly metadata (`<AssemblyMetadata Include="GroundControl.Networ
 | --- | --- | --- |
 | `Project` | resolved by Compose | Compose project name. |
 | `ProjectDirectory` | closest Compose file | Compose project directory, relative to the test assembly. |
-| `Container` | `groundcontrol` | Name of the tests container as a service of the project, which services reach the tests by. |
+| `Container` | `groundcontrol` | Name of the tests container as a service of the project, which the services reach the tests by. |
 | `Image` | .NET or ASP.NET Core image of the test runtime | Image of the tests container; it needs `bash`, as the default .NET images have (Alpine and chiseled ones do not). |
 | `Network` | the one most services are on | Network of the tests container. |
-| `ReadinessTimeout` | 5 minutes | How long to wait for every service to be healthy (or running, without a healthcheck) and one-off services to complete, in seconds or as a time span; `0` to not wait. |
+| `ReadinessTimeout` | 5 minutes | How long to wait for every service to be healthy (or running, without a healthcheck), one-off services to complete and the test run in progress to end, in seconds or as a time span; `0` to not wait. |
 | `Docker` | `docker` | Docker CLI executable. |
 | `DockerContext` | current | Docker context. |
 
@@ -51,7 +51,7 @@ Optional, as assembly metadata (`<AssemblyMetadata Include="GroundControl.Networ
 
 Debug the tests as usual: the test process in the container waits for a debugger, and the IDE is asked to attach.
 
-- **Rider**: install `groundcontrol-rider-<version>.jar` from the [releases](https://github.com/vladislavtrayan/groundcontrol/releases) by *Settings → Plugins → ⚙ → Install Plugin from Disk* and restart Rider. Rider deploys its debugger tools into the container on the first attach; they are kept in the `groundcontrol-debugger-tools` Docker volume for the next containers (remove it if attaching fails after a Rider upgrade).
+- **Rider**: install `groundcontrol-rider-<version>.jar` from the [releases](https://github.com/vladislavtrayan/groundcontrol/releases) by *Settings → Plugins → ⚙ → Install Plugin from Disk* and restart Rider. Rider deploys its debugger tools into the container on the first attach; they are kept in the `groundcontrol-debugger-tools` Docker volume for the containers of later runs (remove it if attaching fails after a Rider upgrade).
 - **Other IDEs**: attach to the process in the container by hand; the run logs the container and process ID.
 
 ## Development

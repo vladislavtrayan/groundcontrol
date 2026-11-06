@@ -24,18 +24,17 @@ public class SampleProjectTests(SampleProject sample) : IClassFixture<SampleProj
         Assert.Equal(Tests, finished.GetProperty("TestsTotal").GetInt32() - finished.GetProperty("TestsNotRun").GetInt32());
     }
 
-    // The tests container of the project is shared by the runs in progress (within the same container, so a quick test only), and dropped
-    // by the last of them.
+    // Test runs of the project run one at a time, each within a container of its own, removed once the run completes.
     [Fact]
-    public async Task SharesContainerAndDropsItAfterLastRun()
+    public async Task RunsOneAtATimeWithinOwnContainers()
     {
-        string[] test = ["-method", "GroundControl.Tests.Sample.NetworkTests.RunsWithinContainer"];
+        string[] test = ["-method", "GroundControl.Tests.Sample.NetworkTests.IsReachedByName"];
 
         var runs = await Task.WhenAll(sample.RunAsync(test), sample.RunAsync(test), sample.RunAsync(test));
 
         Assert.All(runs, run => Assert.Equal(0, run.ExitCode));
         Assert.All(runs, run => Assert.Single(run.Of("test-passed")));
-        Assert.NotEqual(0, (await sample.DockerAsync("container", "inspect", "groundcontrol-sample-groundcontrol-1")).ExitCode);
+        Assert.Empty((await sample.DockerAsync("ps", "--all", "--filter", "label=com.docker.compose.service=groundcontrol", "--format", "{{.Names}}")).Output);
     }
 
     // The services of the project reach the tests container by its name while a run is in progress.

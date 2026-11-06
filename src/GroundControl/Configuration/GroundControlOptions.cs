@@ -20,8 +20,8 @@ public sealed record GroundControlOptions
     // containing a Compose file.
     public string? ProjectDirectory { get; init; }
 
-    // Name of the tests container as a service of the project (run within for every test assembly while test runs are in progress),
-    // which services reach the tests by; the tests are given it in GROUNDCONTROL_CONTAINER.
+    // Name of the tests container as a service of the project (one test run at a time), which services reach the tests by;
+    // the tests are given it in GROUNDCONTROL_CONTAINER.
     public string Container { get; init; } = "groundcontrol";
 
     // Image of the tests container; by default, the .NET (or ASP.NET Core) image of the test assembly runtime.
@@ -30,8 +30,8 @@ public sealed record GroundControlOptions
     // Network of the tests container; by default, the one most services of the project are on.
     public string? Network { get; init; }
 
-    // How long to wait for the project to be ready (every service healthy, or running if it has no healthcheck, and one-off services,
-    // e.g., migrations, completed successfully): seconds, or a time span (e.g., 00:05:00); 0 not to wait.
+    // How long to wait for the project to be ready (every service healthy, or running if it has no healthcheck, one-off services,
+    // e.g., migrations, completed successfully, and no other test run in progress): seconds, or a time span (e.g., 00:05:00); 0 not to wait.
     public TimeSpan ReadinessTimeout { get; init; } = TimeSpan.FromMinutes(5);
 
     // Docker CLI executable.
