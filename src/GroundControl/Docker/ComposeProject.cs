@@ -1,18 +1,18 @@
-using System.Text.Json;
+using Docker.DotNet.Models;
 using GroundControl.Configuration;
 
 namespace GroundControl.Docker;
 
-// The Docker Compose project of the tests, resolved by Docker Compose as `docker compose` does in its directory
-// (COMPOSE_PROJECT_NAME, COMPOSE_FILE, .env, the name of the project in Compose files), unless the project is configured.
-internal sealed class ComposeProject(DockerClient docker, GroundControlOptions options, string directory)
+// The Docker Compose project of the tests: the containers labeled by Docker Compose with the project directory (the closest directory
+// of the test assembly containing a Compose file, unless configured), or with the project name if configured.
+internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions options, string directory)
 {
     private static readonly string[] ComposeFiles = ["compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"];
 
     public string Directory => directory;
 
     // The configured project directory (relative to the test assembly), otherwise the closest directory of the test assembly containing a Compose file.
-    public static ComposeProject Find(DockerClient docker, GroundControlOptions options, string assemblyPath)
+    public static ComposeProject Find(DockerEngine docker, GroundControlOptions options, string assemblyPath)
     {
         var assemblyDirectory = Path.GetDirectoryName(assemblyPath);
         if (options.ProjectDirectory is { } projectDirectory)
@@ -40,7 +40,7 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
         var network = options.Network
             ?? running
                 .Where(container => container.Service != options.Container)
-                .SelectMany(container => container.Networks.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .SelectMany(container => container.Networks)
                 .GroupBy(name => name)
                 .OrderByDescending(group => group.Count())
                 .Select(group => group.Key)
@@ -84,15 +84,12 @@ internal sealed class ComposeProject(DockerClient docker, GroundControlOptions o
         }
     }
 
-    private async Task<List<ComposeContainer>> GetContainersAsync(CancellationToken cancellationToken) =>
-        (await docker.GetOutputAsync(this.Compose(["ps", "--all", "--format", "json"]), cancellationToken)).SelectMany(ComposeContainer.Parse).ToList();
-
-    private string[] Compose(string[] arguments) =>
-        ["compose", "--project-directory", directory, .. options.Project is { } name ? ["--project-name", name] : Array.Empty<string>(), .. arguments];
+    private Task<List<ComposeContainer>> GetContainersAsync(CancellationToken cancellationToken) =>
+        docker.GetComposeContainersAsync(options.Project, directory, cancellationToken);
 }
 
-// A container of the Docker Compose project (docker compose ps --format json).
-internal sealed record ComposeContainer(string Id, string Name, string Project, string Service, string State, string Health, int ExitCode, string Status, string Networks)
+// A container of the Docker Compose project, as inspected.
+internal sealed record ComposeContainer(string Id, string Name, string Project, string Service, string State, string Health, long ExitCode, IReadOnlyList<string> Networks)
 {
     // Healthy, running without a healthcheck, or completed successfully (one-off services).
     public bool IsReady =>
@@ -100,29 +97,19 @@ internal sealed record ComposeContainer(string Id, string Name, string Project, 
 
     public bool HasFailed => this.Health == "unhealthy" || (this.State is "exited" or "dead" && this.ExitCode != 0);
 
-    // Docker Compose reports a JSON object per line (a JSON array by its earlier versions).
-    public static IEnumerable<ComposeContainer> Parse(string line)
+    public string Status => this.Health.Length > 0 ? $"{this.State}, {this.Health}" : this.State == "exited" ? $"exited with {this.ExitCode}" : this.State;
+
+    public static ComposeContainer From(ContainerInspectResponse container)
     {
-        if (string.IsNullOrWhiteSpace(line))
-        {
-            return [];
-        }
-
-        var json = JsonDocument.Parse(line).RootElement;
-        return json.ValueKind == JsonValueKind.Array ? json.EnumerateArray().Select(Parse).ToList() : [Parse(json)];
+        var labels = container.Config?.Labels;
+        return new ComposeContainer(
+            container.ID,
+            container.Name.TrimStart('/'),
+            DockerEngine.Label(labels, DockerEngine.ProjectLabel) ?? string.Empty,
+            DockerEngine.Label(labels, DockerEngine.ServiceLabel) ?? string.Empty,
+            container.State?.Status ?? string.Empty,
+            container.State?.Health?.Status is { } health && health != "none" ? health : string.Empty,
+            container.State?.ExitCode ?? 0,
+            container.NetworkSettings?.Networks?.Keys.ToList() ?? []);
     }
-
-    private static ComposeContainer Parse(JsonElement json) => new(
-        Get(json, "ID"),
-        Get(json, "Name"),
-        Get(json, "Project"),
-        Get(json, "Service"),
-        Get(json, "State"),
-        Get(json, "Health"),
-        json.TryGetProperty("ExitCode", out var exitCode) && exitCode.ValueKind == JsonValueKind.Number ? exitCode.GetInt32() : 0,
-        Get(json, "Status"),
-        Get(json, "Networks"));
-
-    private static string Get(JsonElement json, string property) =>
-        json.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString()! : string.Empty;
 }

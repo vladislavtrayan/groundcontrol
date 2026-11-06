@@ -7,7 +7,7 @@ namespace GroundControl.Configuration;
 // Settings of remote test runs, all optional: assembly metadata of the test assembly, e.g.,
 // <AssemblyMetadata Include="GroundControl.Network" Value="backend" /> in the test project, overridden by environment variables,
 // e.g., GROUNDCONTROL_NETWORK=backend (GROUNDCONTROL_ followed by the setting name in upper snake case).
-// GROUNDCONTROL_TEST_CASES is not a setting: it is set by the remote test process (see TestCaseSerialization).
+// GROUNDCONTROL_TEST_CASES and GROUNDCONTROL_CONTAINER are not settings: they are given to the remote test process.
 public sealed record GroundControlOptions
 {
     private const string MetadataPrefix = "GroundControl.";
@@ -34,10 +34,10 @@ public sealed record GroundControlOptions
     // e.g., migrations, completed successfully, and no other test run in progress): seconds, or a time span (e.g., 00:05:00); 0 not to wait.
     public TimeSpan ReadinessTimeout { get; init; } = TimeSpan.FromMinutes(5);
 
-    // Docker CLI executable.
-    public string Docker { get; init; } = "docker";
+    // Docker Engine API endpoint (e.g., tcp://host:2375); by default, DOCKER_HOST, otherwise the one of the Docker context.
+    public string? DockerHost { get; init; }
 
-    // Docker context; by default, the current one.
+    // Docker CLI context (its endpoint is read from the context store); by default, DOCKER_CONTEXT, otherwise the current one.
     public string? DockerContext { get; init; }
 
     public static GroundControlOptions Load(Assembly assembly) =>
@@ -69,7 +69,7 @@ public sealed record GroundControlOptions
             ReadinessTimeout = Get(nameof(ReadinessTimeout)) is { } timeout
                 ? int.TryParse(timeout, out var seconds) ? TimeSpan.FromSeconds(seconds) : TimeSpan.Parse(timeout, CultureInfo.InvariantCulture)
                 : defaults.ReadinessTimeout,
-            Docker = Get(nameof(Docker)) ?? defaults.Docker,
+            DockerHost = Get(nameof(DockerHost)),
             DockerContext = Get(nameof(DockerContext)),
         };
     }

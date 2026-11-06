@@ -22,9 +22,9 @@ Reference the package and declare the test framework in the test project:
 </ItemGroup>
 ```
 
-Start the project (`docker compose up --detach --build`) and run the tests as usual. The project is the closest Compose file above the test assembly.
+Start the project (`docker compose up --detach --build`) and run the tests as usual. The project is the closest Compose file above the test assembly; its containers are found by the labels Docker Compose gives them.
 
-Requirements: .NET 8 or later, xUnit.net v3 2.0 or later, and the Docker CLI with access to the project.
+Requirements: .NET 8 or later, xUnit.net v3 2.0 or later, and access to the Docker Engine API of the project (the socket or named pipe of the Docker CLI context, or `DOCKER_HOST`).
 
 ## How it works
 
@@ -41,11 +41,11 @@ Optional, as assembly metadata (`<AssemblyMetadata Include="GroundControl.Networ
 | `Project` | resolved by Compose | Compose project name. |
 | `ProjectDirectory` | closest Compose file | Compose project directory, relative to the test assembly. |
 | `Container` | `groundcontrol` | Name of the tests container as a service of the project, which the services reach the tests by. |
-| `Image` | .NET or ASP.NET Core image of the test runtime | Image of the tests container; it needs `bash`, as the default .NET images have (Alpine and chiseled ones do not). |
+| `Image` | .NET or ASP.NET Core image of the test runtime | Image of the tests container. |
 | `Network` | the one most services are on | Network of the tests container. |
 | `ReadinessTimeout` | 5 minutes | How long to wait for every service to be healthy (or running, without a healthcheck), one-off services to complete and the test run in progress to end, in seconds or as a time span; `0` to not wait. |
-| `Docker` | `docker` | Docker CLI executable. |
-| `DockerContext` | current | Docker context. |
+| `DockerHost` | `DOCKER_HOST`, else the context | Docker Engine API endpoint, e.g., `tcp://build:2375`. |
+| `DockerContext` | `DOCKER_CONTEXT`, else the current | Docker CLI context, whose endpoint is read from the context store. |
 
 ## Debugging
 

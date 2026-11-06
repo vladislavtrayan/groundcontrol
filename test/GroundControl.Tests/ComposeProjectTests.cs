@@ -6,7 +6,7 @@ namespace GroundControl.Tests;
 
 public class ComposeProjectTests
 {
-    private static readonly DockerClient Docker = new("docker", null);
+    private static readonly DockerEngine Docker = new(new GroundControlOptions { DockerHost = "tcp://localhost:2375" });
 
     [Fact]
     public void FindsClosestComposeFile()

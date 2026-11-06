@@ -13,7 +13,7 @@ public class GroundControlOptionsTests
         Assert.Equal(new GroundControlOptions(), options);
         Assert.Equal("groundcontrol", options.Container);
         Assert.Null(options.Network);
-        Assert.Equal("docker", options.Docker);
+        Assert.Null(options.DockerHost);
         Assert.Equal(TimeSpan.FromMinutes(5), options.ReadinessTimeout);
     }
 

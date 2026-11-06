@@ -49,19 +49,24 @@ public class TestContainerTests
     {
         var container = new TestContainer("sample", "groundcontrol", "mcr.microsoft.com/dotnet/runtime:8.0", "sample_default", Project);
 
-        var arguments = container.Run("/workspace/bin");
+        var parameters = container.Create("/workspace/bin", ["dotnet", "/workspace/bin/Tests.dll"], ["TESTS=/tmp/tests.txt"]);
 
         Assert.Matches("^sample-groundcontrol-run-[0-9a-f]{8}$", container.Name);
-        Assert.Equal(
-            ["run", "--rm", "--interactive", "--init", "--name", container.Name, "--hostname", "groundcontrol", "--network", "sample_default", "--network-alias", "groundcontrol"],
-            arguments.Take(12));
-        Assert.Equal(
-            ["com.docker.compose.project=sample", "com.docker.compose.service=groundcontrol", "com.docker.compose.oneoff=True"],
-            arguments.Skip(12).Take(6).Where(argument => argument != "--label"));
-        Assert.Contains("GROUNDCONTROL_CONTAINER=groundcontrol", arguments);
-        Assert.Contains($"type=bind,source={Project},target=/workspace,readonly", arguments);
-        Assert.Contains("type=volume,source=groundcontrol-debugger-tools,target=/root/.RiderDebuggerTools", arguments);
-        Assert.Equal(["--workdir", "/workspace/bin", "mcr.microsoft.com/dotnet/runtime:8.0"], arguments.TakeLast(3));
-        Assert.Equal(["rm", "--force", container.Name], container.Stop());
+        Assert.Equal(container.Name, parameters.Name);
+        Assert.Equal("mcr.microsoft.com/dotnet/runtime:8.0", parameters.Image);
+        Assert.Equal(["dotnet", "/workspace/bin/Tests.dll"], parameters.Cmd);
+        Assert.Equal("/workspace/bin", parameters.WorkingDir);
+        Assert.Equal("groundcontrol", parameters.Hostname);
+        Assert.Equal(["GROUNDCONTROL_CONTAINER=groundcontrol", "TESTS=/tmp/tests.txt"], parameters.Env);
+        Assert.Equal("sample", parameters.Labels["com.docker.compose.project"]);
+        Assert.Equal("groundcontrol", parameters.Labels["com.docker.compose.service"]);
+        Assert.Equal("True", parameters.Labels["com.docker.compose.oneoff"]);
+        Assert.True(parameters.AttachStdout && parameters.AttachStderr && !parameters.Tty && !parameters.OpenStdin);
+        Assert.True(parameters.HostConfig.Init);
+        Assert.Equal(["groundcontrol"], Assert.Single(parameters.NetworkingConfig.EndpointsConfig, endpoint => endpoint.Key == "sample_default").Value.Aliases);
+        Assert.Collection(
+            parameters.HostConfig.Mounts,
+            mount => Assert.Equal(("bind", Project, "/workspace", true), (mount.Type, mount.Source, mount.Target, mount.ReadOnly)),
+            mount => Assert.Equal(("volume", "groundcontrol-debugger-tools", "/root/.RiderDebuggerTools", false), (mount.Type, mount.Source, mount.Target, mount.ReadOnly)));
     }
 }

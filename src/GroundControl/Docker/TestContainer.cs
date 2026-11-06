@@ -1,10 +1,11 @@
 using System.Text.Json.Nodes;
+using Docker.DotNet.Models;
 
 namespace GroundControl.Docker;
 
 // A container created for a test run within the Docker Compose project (named and labeled as a one-off of its groundcontrol service),
 // on its network, where the services reach the tests by the service name; the test process is its main process, and it is removed
-// once the run completes (docker run --rm). The project directory is mounted into it.
+// once the run completes. The project directory is mounted into it.
 internal sealed class TestContainer(string project, string service, string image, string network, string projectDirectory)
 {
     private const string Workspace = "/workspace";
@@ -27,19 +28,38 @@ internal sealed class TestContainer(string project, string service, string image
             : $"mcr.microsoft.com/dotnet/runtime:{version}";
     }
 
-    // Docker arguments running a process within the container (given the name the services reach it by), followed by the command of the process.
-    public IReadOnlyList<string> Run(string workingDirectory) =>
-    [
-        "run", "--rm", "--interactive", "--init", "--name", this.Name, "--hostname", service, "--network", network, "--network-alias", service,
-        "--label", $"com.docker.compose.project={project}", "--label", $"com.docker.compose.service={service}", "--label", "com.docker.compose.oneoff=True",
-        "--env", $"GROUNDCONTROL_CONTAINER={service}",
-        "--mount", $"type=bind,source={projectDirectory},target={Workspace},readonly",
-        "--mount", $"type=volume,source={DebuggerToolsVolume},target={DebuggerToolsDirectory}",
-        "--workdir", workingDirectory, image,
-    ];
-
-    // Docker arguments removing the container, which kills the process.
-    public IReadOnlyList<string> Stop() => ["rm", "--force", this.Name];
+    // The container running the command with the environment (given the name the services reach it by).
+    public CreateContainerParameters Create(string workingDirectory, IList<string> command, IEnumerable<string> environment) => new()
+    {
+        Name = this.Name,
+        Image = image,
+        Cmd = command,
+        WorkingDir = workingDirectory,
+        Hostname = service,
+        Env = [$"GROUNDCONTROL_CONTAINER={service}", .. environment],
+        Labels = new Dictionary<string, string>
+        {
+            [DockerEngine.ProjectLabel] = project,
+            [DockerEngine.ServiceLabel] = service,
+            ["com.docker.compose.oneoff"] = "True",
+        },
+        AttachStdout = true,
+        AttachStderr = true,
+        Tty = false,
+        HostConfig = new HostConfig
+        {
+            Init = true,
+            Mounts =
+            [
+                new Mount { Type = "bind", Source = projectDirectory, Target = Workspace, ReadOnly = true },
+                new Mount { Type = "volume", Source = DebuggerToolsVolume, Target = DebuggerToolsDirectory },
+            ],
+        },
+        NetworkingConfig = new NetworkingConfig
+        {
+            EndpointsConfig = new Dictionary<string, EndpointSettings> { [network] = new EndpointSettings { Aliases = [service] } },
+        },
+    };
 
     // Maps a path of the host within the project directory to the container.
     public string MapPath(string path)

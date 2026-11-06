@@ -160,7 +160,7 @@ internal class ContainerTestExecutor(Assembly assembly) : ITestFrameworkExecutor
         CancellationTokenSource cancellation)
     {
         var options = GroundControlOptions.Load(assembly);
-        var docker = new DockerClient(options.Docker, options.DockerContext);
+        using var docker = new DockerEngine(options);
         var project = ComposeProject.Find(docker, options, assembly.Location);
         var container = await project.GetTestContainerAsync(assembly.Location, cancellation.Token);
 

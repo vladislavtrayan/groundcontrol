@@ -1,3 +1,4 @@
+using Docker.DotNet.Models;
 using GroundControl.Docker;
 using Xunit;
 
@@ -6,20 +7,33 @@ namespace GroundControl.Tests;
 public class ComposeContainerTests
 {
     [Fact]
-    public void ParsesLines()
+    public void ReadsInspection()
     {
-        var container = Assert.Single(ComposeContainer.Parse(
-            """{"ID":"abc","Name":"sample-web-1","Project":"sample","Service":"web","State":"running","Health":"healthy","ExitCode":0,"Status":"Up 5 seconds (healthy)","Networks":"sample_default"}"""));
+        var inspection = new ContainerInspectResponse
+        {
+            ID = "abc",
+            Name = "/sample-web-1",
+            Config = new Config { Labels = new Dictionary<string, string> { ["com.docker.compose.project"] = "sample", ["com.docker.compose.service"] = "web" } },
+            State = new ContainerState { Status = "running", Health = new Health { Status = "healthy" }, ExitCode = 0 },
+            NetworkSettings = new NetworkSettings { Networks = new Dictionary<string, EndpointSettings> { ["sample_default"] = new() } },
+        };
 
-        Assert.Equal(new ComposeContainer("abc", "sample-web-1", "sample", "web", "running", "healthy", 0, "Up 5 seconds (healthy)", "sample_default"), container);
+        var container = ComposeContainer.From(inspection);
+
+        Assert.Equal(("abc", "sample-web-1", "sample", "web", "running", "healthy", 0L), (container.Id, container.Name, container.Project, container.Service, container.State, container.Health, container.ExitCode));
+        Assert.Equal(["sample_default"], container.Networks);
+        Assert.Equal("running, healthy", container.Status);
     }
 
     [Fact]
-    public void ParsesArrays() =>
-        Assert.Equal(["web", "db"], ComposeContainer.Parse("""[{"Name":"web"},{"Name":"db"}]""").Select(container => container.Name));
+    public void ReadsInspectionWithoutHealthcheckOrLabels()
+    {
+        var container = ComposeContainer.From(new ContainerInspectResponse { ID = "abc", Name = "/other", State = new ContainerState { Status = "exited", ExitCode = 1 } });
 
-    [Fact]
-    public void IgnoresEmptyLines() => Assert.Empty(ComposeContainer.Parse(" "));
+        Assert.Equal(("", "", "exited", "", 1L), (container.Project, container.Service, container.State, container.Health, container.ExitCode));
+        Assert.Empty(container.Networks);
+        Assert.Equal("exited with 1", container.Status);
+    }
 
     [Theory]
     [InlineData("running", "healthy", 0, true, false)]
@@ -32,7 +46,7 @@ public class ComposeContainerTests
     [InlineData("created", "", 0, false, false)]
     public void ReportsReadiness(string state, string health, int exitCode, bool ready, bool failed)
     {
-        var container = new ComposeContainer("id", "name", "project", "service", state, health, exitCode, string.Empty, string.Empty);
+        var container = new ComposeContainer("id", "name", "project", "service", state, health, exitCode, []);
 
         Assert.Equal(ready, container.IsReady);
         Assert.Equal(failed, container.HasFailed);
