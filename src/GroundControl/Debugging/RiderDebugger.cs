@@ -1,6 +1,12 @@
+using System.Diagnostics;
 using System.Net;
 
 namespace GroundControl.Debugging;
+
+/// <summary>
+/// The test process to attach the debugger to, the Docker Compose project directory of the tests and the test assembly (e.g., to find the IDE project).
+/// </summary>
+internal sealed record DebugTarget(string ContainerName, int ProcessId, string ProjectDirectory, string AssemblyPath);
 
 /// <summary>Asks Rider to attach its debugger to the test process (GroundControl Rider plugin, see rider/build.ps1).</summary>
 internal static class RiderDebugger
@@ -26,14 +32,14 @@ internal static class RiderDebugger
                 using var response = await client.GetAsync($"http://127.0.0.1:{port}/groundcontrol/attach?{query}", cancellationToken);
                 if (response.IsSuccessStatusCode)
                 {
-                    Debuggers.Log($"Debugger has been attached to process {target.ProcessId} in container {target.ContainerName}.");
+                    Log($"Debugger has been attached to process {target.ProcessId} in container {target.ContainerName}.");
                     return true;
                 }
 
                 // Other IDE instances (and IDEs without the plugin) do not have the project open.
                 if (response.StatusCode != HttpStatusCode.NotFound)
                 {
-                    Debuggers.Log($"Debugger has not been attached: {await response.Content.ReadAsStringAsync(cancellationToken)}");
+                    Log($"Debugger has not been attached: {await response.Content.ReadAsStringAsync(cancellationToken)}");
                     return false;
                 }
             }
@@ -43,11 +49,14 @@ internal static class RiderDebugger
             }
             catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                Debuggers.Log($"Debugger has not been attached by Rider (port {port}) within {client.Timeout}; attach manually if it is not.");
+                Log($"Debugger has not been attached by Rider (port {port}) within {client.Timeout}; attach manually if it is not.");
                 return false;
             }
         }
 
         return false;
     }
+
+    public static void Log(string message) => Debugger.Log(
+        0, nameof(GroundControlTestFramework), message + Environment.NewLine);
 }
