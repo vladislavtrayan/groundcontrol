@@ -11,7 +11,7 @@ public class TestContainerTests
     [Fact]
     public void MapsPathsByMounts()
     {
-        var container = new TestContainer("sample-groundcontrol-1", "groundcontrol", "network", [(Project, "/src"), (Path.Combine(Project, "bin"), "/bin/")]);
+        var container = new TestContainer("sample-groundcontrol-1", "groundcontrol", "network", [(Project, "/src"), (Path.Combine(Project, "bin"), "/bin/")], Project);
 
         Assert.Equal("/bin/Debug/Tests.dll", container.MapPath(Path.Combine(Project, "bin", "Debug", "Tests.dll")));
         Assert.Equal("/src/tests/Tests.cs", container.MapPath(Path.Combine(Project, "tests", "Tests.cs")));
@@ -24,7 +24,7 @@ public class TestContainerTests
     [Fact]
     public void RunsWithinContainerUnderLease()
     {
-        var container = new TestContainer("sample-groundcontrol-1", "groundcontrol", "sample_default", [(Project, "/tests")]);
+        var container = new TestContainer("sample-groundcontrol-1", "groundcontrol", "sample_default", [(Project, "/tests")], Project);
 
         var parameters = container.Exec("/tests/bin", "/tmp/groundcontrol/run", ["dotnet", "/tests/bin/Tests.dll"], ["TESTS=/tmp/groundcontrol/run/test-cases.txt"]);
 

@@ -18,7 +18,8 @@ public sealed record GroundControlOptions
     private const string VariablePrefix = "GROUNDCONTROL_";
 
     /// <summary>
-    /// The Docker Compose project name; by default, the containers of the project are found by the project directory.
+    /// The Docker Compose project name, by which the containers of the project are found (a Compose file is then not needed to find the project);
+    /// by default, they are found by the project directory.
     /// </summary>
     public string? Project { get; init; }
 

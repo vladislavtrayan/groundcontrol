@@ -5,9 +5,9 @@ namespace GroundControl.Docker;
 /// <summary>
 /// The container of the tests service the Docker Compose project declares, which the test runs run within as on a host, kept up with
 /// the project (GroundControl neither creates nor removes it), on the network of the project, where the services reach the tests by
-/// the service name (<see cref="GroundControl.Configuration.GroundControlOptions.Container"/>).
+/// the service name (<see cref="GroundControl.Configuration.GroundControlOptions.Container"/>); with the project directory (for the debugger).
 /// </summary>
-internal sealed class TestContainer(string name, string service, string network, IReadOnlyList<(string Source, string Destination)> mounts)
+internal sealed class TestContainer(string name, string service, string network, IReadOnlyList<(string Source, string Destination)> mounts, string projectDirectory)
 {
     /// <summary>The script running a test process within the container (see run.sh).</summary>
     private static readonly Lazy<string> RunScript = new(() =>
@@ -22,6 +22,9 @@ internal sealed class TestContainer(string name, string service, string network,
 
     public string Network => network;
 
+    /// <summary>The Docker Compose project directory: as found on the host, otherwise as the Docker host sees it (labeled by Docker Compose).</summary>
+    public string ProjectDirectory => projectDirectory;
+
     /// <summary>
     /// Checks that the container runs the tests of the assembly: it mounts the assembly, and has <c>sh</c> (which test processes are run by)
     /// and the runtimes of the assembly; otherwise, the image is suggested.
@@ -35,6 +38,7 @@ internal sealed class TestContainer(string name, string service, string network,
         }
 
         var runtimes = await docker.ExecAsync(this.Name, ["sh", "-c", "dotnet --list-runtimes"], cancellationToken);
+
         if (DotNetRuntimes.MissingFrameworks(DotNetRuntimes.GetFrameworks(assemblyPath), runtimes.Output) is { Count: > 0 } missing)
         {
             throw new InvalidOperationException($"The {service} service has no {string.Join(" and ", missing)}: use {image}.");

@@ -3,18 +3,22 @@ using GroundControl.Configuration;
 namespace GroundControl.Docker;
 
 /// <summary>
-/// The Docker Compose project of the tests: the containers labeled by Docker Compose with the project directory (the closest directory
-/// of the test assembly containing a Compose file, unless configured), or with the project name if configured.
+/// The Docker Compose project of the tests: the containers labeled by Docker Compose with the project name if configured, otherwise with
+/// the project directory (the closest directory of the test assembly containing a Compose file, unless configured).
 /// </summary>
-internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions options, string directory)
+internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions options, string? directory)
 {
     private static readonly string[] ComposeFiles = ["compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"];
 
-    public string Directory => directory;
+    /// <summary>The project name, once known (configured, or of the containers of the project directory), to list the containers by.</summary>
+    private string? name = options.Project;
+
+    /// <summary>The project directory, if known: configured, or found by a Compose file (optional if the project name is configured).</summary>
+    public string? Directory => directory;
 
     /// <summary>
     /// The project of the configured directory (relative to the test assembly), otherwise of the closest directory of the test assembly
-    /// containing a Compose file.
+    /// containing a Compose file; without one, the project of the configured name.
     /// </summary>
     public static ComposeProject Find(DockerEngine docker, GroundControlOptions options, string assemblyPath)
     {
@@ -30,7 +34,7 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
             current = Path.GetDirectoryName(current);
         }
 
-        return current is not null
+        return current is not null || options.Project is not null
             ? new ComposeProject(docker, options, current)
             : throw new InvalidOperationException($"Docker Compose file ({string.Join(", ", ComposeFiles)}) is not found in directories of {assemblyPath}.");
     }
@@ -51,42 +55,53 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
                 .OrderByDescending(group => group.Count())
                 .Select(group => group.Key)
                 .FirstOrDefault()
-            ?? throw new InvalidOperationException($"Docker Compose project in {directory} is not running, start it: docker compose up --detach --build");
+            ?? throw new InvalidOperationException($"{this} is not running, start it: docker compose up --detach --build");
         containers = await this.WaitUntilReadyAsync(containers, cancellationToken);
 
         var image = DotNetRuntimes.GetImage(assemblyPath);
-        switch (containers.Where(container => container.Service == service).ToList())
+        var declared = containers.Where(container => container.Service == service).ToList();
+        if (declared.FirstOrDefault(container => !container.Declared) is { } stale)
+        {
+            throw new InvalidOperationException(
+                $"Container {stale.Name} of the {service} service has not been created by Docker Compose (e.g., left by GroundControl 0.3): remove it: docker rm --force {stale.Name}");
+        }
+
+        switch (declared)
         {
             case []:
                 throw new InvalidOperationException(
-                    $"Docker Compose project in {directory} does not declare the {service} service, which the tests run within: declare it, e.g., "
+                    $"{this} does not declare the {service} service, which the tests run within: declare it, e.g., "
                     + $"'{service}: {{ image: {image}, command: [ \"sleep\", \"infinity\" ], volumes: [ \".:/workspace:ro\" ] }}' in its services.");
 
-            case [{ State: "running" } declared] when declared.Networks.Contains(network):
-                var container = new TestContainer(declared.Name, service, network, declared.Mounts);
+            case [{ State: "running" } running] when running.Networks.Contains(network):
+                var container = new TestContainer(running.Name, service, network, running.Mounts, directory ?? running.ProjectDirectory);
                 await container.CheckAsync(docker, assemblyPath, image, cancellationToken);
                 return container;
 
             case [{ State: "running" }]:
                 throw new InvalidOperationException(
-                    $"The {service} service of the Docker Compose project in {directory} is not on the {network} network of the services: add it to the network.");
+                    $"The {service} service of the {this} is not on the {network} network of the services: add it to the network.");
 
-            case [var declared]:
+            case [var stopped]:
                 throw new InvalidOperationException(
-                    $"The {service} service of the Docker Compose project in {directory} is not running ({declared.Status}), start it: docker compose up --detach {service}");
+                    $"The {service} service of the {this} is not running ({stopped.Status}), start it: docker compose up --detach {service}");
 
-            case var declared:
+            case var several:
                 throw new InvalidOperationException(
-                    $"The {service} service of the Docker Compose project in {directory} has {declared.Count} containers: scale it to one, as the services reach the tests by its name.");
+                    $"The {service} service of the {this} has {several.Count} containers: scale it to one, as the services reach the tests by its name.");
         }
     }
+
+    public override string ToString() => options.Project is { } project ? $"Docker Compose project {project}" : $"Docker Compose project in {directory}";
 
     /// <summary>
     /// Waits until the services of the project are healthy and its one-off services (e.g., migrations) have completed, as services do not
     /// wait for each other: Docker Compose dependency conditions disable debugging of services in IDEs.
     /// </summary>
     /// <returns>The containers of the project once ready.</returns>
-    /// <remarks>The tests service is waited for to run, not to be healthy.</remarks>
+    /// <remarks>
+    /// The tests service is waited for to run, not to be healthy; stopped (exited or dead), it does not start on its own, so it is not waited for.
+    /// </remarks>
     private async Task<List<ComposeContainer>> WaitUntilReadyAsync(List<ComposeContainer> containers, CancellationToken cancellationToken)
     {
         if (options.ReadinessTimeout <= TimeSpan.Zero)
@@ -106,14 +121,15 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
                 return containers;
             }
 
-            var failed = waiting.Where(container => container.Service != service && container.HasFailed).ToList();
+            var failed = waiting.Where(container => container.Service == service ? container.State is "exited" or "dead" : container.HasFailed).ToList();
             if (failed.Count > 0 || DateTime.UtcNow > deadline)
             {
-                var hint = failed.Count == 0 && waiting.Any(container => container.Service == service)
+                var reported = failed.Count > 0 ? failed : waiting;
+                var hint = reported.Any(container => container.Service == service)
                     ? $" Start the {service} service: docker compose up --detach {service}"
                     : string.Empty;
                 throw new InvalidOperationException(
-                    $"Docker Compose project in {directory} is not ready: {string.Join(", ", (failed.Count > 0 ? failed : waiting).Select(container => $"{container.Name} ({container.Status})"))}.{hint}");
+                    $"{this} is not ready: {string.Join(", ", reported.Select(container => $"{container.Name} ({container.Status})"))}.{hint}");
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
@@ -121,12 +137,19 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
         }
     }
 
-    /// <summary>The containers of the project: by its name if configured, otherwise the ones of the project directory.</summary>
-    private async Task<List<ComposeContainer>> GetContainersAsync(CancellationToken cancellationToken) =>
-        (await docker.InspectContainersAsync(ComposeLabels.Project, cancellationToken))
-            .Where(container => options.Project is { } project
-                ? ComposeLabels.Get(container.Config?.Labels, ComposeLabels.Project) == project
-                : ComposeLabels.Get(container.Config?.Labels, ComposeLabels.ProjectDirectory) is { } projectDirectory && HostPath.Same(projectDirectory, directory))
+    /// <summary>
+    /// The containers of the services of the project (not one-off ones, of <c>docker compose run</c>): by the project name if known, otherwise
+    /// the ones of the project directory, whose project name is then known.
+    /// </summary>
+    private async Task<List<ComposeContainer>> GetContainersAsync(CancellationToken cancellationToken)
+    {
+        var label = this.name is { } known ? $"{ComposeLabels.Project}={known}" : ComposeLabels.Project;
+        var containers = (await docker.InspectContainersAsync(label, cancellationToken))
             .Select(container => ComposeContainer.From(container, OperatingSystem.IsWindows()))
+            .Where(container => !container.OneOff
+                && (options.Project is { } project ? container.Project == project : directory is { } known && HostPath.Same(container.ProjectDirectory, known)))
             .ToList();
+        this.name ??= containers.Select(container => container.Project).FirstOrDefault(project => project.Length > 0);
+        return containers;
+    }
 }

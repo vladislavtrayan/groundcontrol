@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace GroundControl.Docker;
 
@@ -9,7 +10,10 @@ internal static class DotNetRuntimes
     public static string GetImage(string assemblyPath)
     {
         var options = RuntimeOptions(assemblyPath);
-        var version = options?["tfm"]?.GetValue<string>() is { } tfm && tfm.StartsWith("net") ? tfm["net".Length..] : $"{Environment.Version.Major}.0";
+        // The target framework (e.g., net8.0, or net8.0-windows) gives the version of the image.
+        var version = options?["tfm"]?.GetValue<string>() is { } tfm && Regex.Match(tfm, @"^net(\d+\.\d+)") is { Success: true } target
+            ? target.Groups[1].Value
+            : $"{Environment.Version.Major}.0";
         return Frameworks(options).Any(framework => framework?["name"]?.GetValue<string>() == "Microsoft.AspNetCore.App")
             ? $"mcr.microsoft.com/dotnet/aspnet:{version}"
             : $"mcr.microsoft.com/dotnet/runtime:{version}";

@@ -29,6 +29,16 @@ public class ComposeProjectTests
         Assert.Throws<InvalidOperationException>(() => ComposeProject.Find(Docker, new GroundControlOptions(), assemblyPath));
     }
 
+    // The containers of a project of the configured name are found by it, so a Compose file is not needed to find the project.
+    [Fact]
+    public void NeedsNoComposeFileWithProjectName()
+    {
+        using var repository = new TemporaryDirectory();
+        var assemblyPath = Path.Combine(repository.Path, "bin", "Tests.dll");
+
+        Assert.Null(ComposeProject.Find(Docker, new GroundControlOptions { Project = "sample" }, assemblyPath).Directory);
+    }
+
     [Fact]
     public void ResolvesProjectDirectoryByAssembly()
     {

@@ -10,6 +10,7 @@ public class DotNetRuntimesTests
     [InlineData(
         """{"runtimeOptions":{"tfm":"net10.0","frameworks":[{"name":"Microsoft.NETCore.App","version":"10.0.0"},{"name":"Microsoft.AspNetCore.App","version":"10.0.0"}]}}""",
         "mcr.microsoft.com/dotnet/aspnet:10.0")]
+    [InlineData("""{"runtimeOptions":{"tfm":"net8.0-windows","framework":{"name":"Microsoft.NETCore.App","version":"8.0.0"}}}""", "mcr.microsoft.com/dotnet/runtime:8.0")]
     public void ReadsRuntimeOfAssembly(string runtimeConfig, string image)
     {
         var directory = Directory.CreateTempSubdirectory("groundcontrol-");

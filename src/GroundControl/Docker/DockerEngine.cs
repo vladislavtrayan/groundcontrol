@@ -21,7 +21,7 @@ internal sealed class DockerEngine : IDisposable
         this.client = new DockerClientConfiguration(new Uri(this.endpoint)).CreateClient();
     }
 
-    /// <summary>The containers having the label, as inspected.</summary>
+    /// <summary>The containers having the label (<c>name</c>, or <c>name=value</c>), as inspected.</summary>
     public async Task<List<ContainerInspectResponse>> InspectContainersAsync(string label, CancellationToken cancellationToken)
     {
         IList<ContainerListResponse> containers;
