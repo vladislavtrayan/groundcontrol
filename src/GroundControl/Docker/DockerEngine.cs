@@ -36,17 +36,12 @@ internal sealed class DockerEngine : IDisposable
             throw new InvalidOperationException($"Docker Engine at {this.endpoint} is not reachable: {e.Message}", e);
         }
 
-        var inspected = new List<ContainerInspectResponse>();
-        foreach (var container in containers)
-        {
-            if (await this.InspectContainerAsync(container.ID, cancellationToken) is { } inspection)
-            {
-                inspected.Add(inspection);
-            }
-        }
-
-        return inspected;
+        return (await this.InspectContainersAsync(containers.Select(container => container.ID), cancellationToken)).OfType<ContainerInspectResponse>().ToList();
     }
+
+    /// <summary>The containers (by their IDs), as inspected, at once; null for one removed meanwhile.</summary>
+    public async Task<List<ContainerInspectResponse?>> InspectContainersAsync(IEnumerable<string> containers, CancellationToken cancellationToken) =>
+        [.. await Task.WhenAll(containers.Select(container => this.InspectContainerAsync(container, cancellationToken)))];
 
     /// <summary>The container (by its name or ID), as inspected, or null if absent.</summary>
     public async Task<ContainerInspectResponse?> InspectContainerAsync(string container, CancellationToken cancellationToken)

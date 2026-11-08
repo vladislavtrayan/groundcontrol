@@ -133,8 +133,24 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-            containers = await this.GetContainersAsync(cancellationToken);
+            containers = await this.RefreshAsync(containers, waiting, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// The containers with the waiting ones inspected again (the others cannot change the readiness); all of them again if a waiting one is gone
+    /// (e.g., recreated by Docker Compose).
+    /// </summary>
+    private async Task<List<ComposeContainer>> RefreshAsync(List<ComposeContainer> containers, List<ComposeContainer> waiting, CancellationToken cancellationToken)
+    {
+        var inspected = await docker.InspectContainersAsync(waiting.Select(container => container.Id), cancellationToken);
+        if (inspected.Contains(null))
+        {
+            return await this.GetContainersAsync(cancellationToken);
+        }
+
+        var refreshed = inspected.ToDictionary(container => container!.ID, container => ComposeContainer.From(container!, OperatingSystem.IsWindows()));
+        return containers.Select(container => refreshed.GetValueOrDefault(container.Id, container)).ToList();
     }
 
     /// <summary>

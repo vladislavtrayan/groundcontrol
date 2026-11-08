@@ -55,6 +55,12 @@ internal class MessageMapper
     /// </returns>
     public MappedMessage? Map(string line)
     {
+        // The output of the tests is not parsed (nor fails to parse): a message is a JSON object.
+        if (!line.StartsWith('{'))
+        {
+            return null;
+        }
+
         JsonObject? message;
         try
         {
