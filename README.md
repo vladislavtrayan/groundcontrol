@@ -94,7 +94,7 @@ Or as an environment variable, which wins: `GROUNDCONTROL_NETWORK=backend`.
 
 Start debugging as usual. The test process in the container waits for the debugger to attach.
 
-- **Rider** attaches on its own once you install the [GroundControl plugin](https://plugins.jetbrains.com/plugin/35827-groundcontrol) from the JetBrains Marketplace. The first attach takes a little longer while Rider copies its debugger tools into the container; they stay there as long as the container does. Mount a volume at `/root/.RiderDebuggerTools` if you want them to survive recreating it.
+- **Rider** attaches on its own once you install the [GroundControl plugin](https://plugins.jetbrains.com/plugin/35827-groundcontrol) from the JetBrains Marketplace.
 - **Other IDEs**: attach to the process by hand. The debug output shows the container and the process ID.
 
 ## Development
