@@ -36,8 +36,8 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
     }
 
     /// <summary>
-    /// The tests container, once the project is ready: the one of the tests service if the project declares it (checked to run the tests),
-    /// otherwise one GroundControl manages on the network of the project (the one most services are on, the default network of the project).
+    /// The container of the tests service the project declares, once the project is ready: checked to run the tests, and to be on the network
+    /// of the project (the one most services are on, the default network of the project).
     /// </summary>
     public async Task<TestContainer> GetTestContainerAsync(string assemblyPath, CancellationToken cancellationToken)
     {
@@ -54,15 +54,16 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
             ?? throw new InvalidOperationException($"Docker Compose project in {directory} is not running, start it: docker compose up --detach --build");
         containers = await this.WaitUntilReadyAsync(containers, cancellationToken);
 
-        var image = options.Image ?? DotNetRuntimes.GetImage(assemblyPath);
-        switch (containers.Where(container => container.Service == service && container.Declared).ToList())
+        var image = DotNetRuntimes.GetImage(assemblyPath);
+        switch (containers.Where(container => container.Service == service).ToList())
         {
             case []:
-                var project = containers.Select(container => container.Project).FirstOrDefault(name => name.Length > 0) ?? Path.GetFileName(directory).ToLowerInvariant();
-                return new ManagedTestContainer(project, service, image, network, directory);
+                throw new InvalidOperationException(
+                    $"Docker Compose project in {directory} does not declare the {service} service, which the tests run within: declare it, e.g., "
+                    + $"'{service}: {{ image: {image}, command: [ \"sleep\", \"infinity\" ], volumes: [ \".:/workspace:ro\" ] }}' in its services.");
 
             case [{ State: "running" } declared] when declared.Networks.Contains(network):
-                var container = new ServiceTestContainer(declared.Name, service, network, declared.Mounts);
+                var container = new TestContainer(declared.Name, service, network, declared.Mounts);
                 await container.CheckAsync(docker, assemblyPath, image, cancellationToken);
                 return container;
 
@@ -85,9 +86,7 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
     /// wait for each other: Docker Compose dependency conditions disable debugging of services in IDEs.
     /// </summary>
     /// <returns>The containers of the project once ready.</returns>
-    /// <remarks>
-    /// The tests service, if declared, is waited for to run, not to be healthy. The tests container GroundControl manages is not a service.
-    /// </remarks>
+    /// <remarks>The tests service is waited for to run, not to be healthy.</remarks>
     private async Task<List<ComposeContainer>> WaitUntilReadyAsync(List<ComposeContainer> containers, CancellationToken cancellationToken)
     {
         if (options.ReadinessTimeout <= TimeSpan.Zero)
@@ -100,7 +99,7 @@ internal sealed class ComposeProject(DockerEngine docker, GroundControlOptions o
         while (true)
         {
             var waiting = containers
-                .Where(container => container.Service == service ? container.Declared && container.State != "running" : !container.IsReady)
+                .Where(container => container.Service == service ? container.State != "running" : !container.IsReady)
                 .ToList();
             if (waiting.Count == 0)
             {

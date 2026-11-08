@@ -5,7 +5,8 @@ using Xunit;
 
 namespace GroundControl.Tests;
 
-// The Docker Compose project of GroundControl.Tests.Sample, started for the tests and removed afterwards (with the tests container).
+// The Docker Compose project of GroundControl.Tests.Sample declaring the tests service (compose.groundcontrol.yaml), started for the tests
+// and removed afterwards.
 public class SampleProject : IAsyncLifetime
 {
     private const string Name = "GroundControl.Tests.Sample";
@@ -14,11 +15,11 @@ public class SampleProject : IAsyncLifetime
     private readonly string[] composeFiles;
 
     public SampleProject()
-        : this([])
+        : this(["compose.yaml", "compose.groundcontrol.yaml"])
     {
     }
 
-    // The project of the given Compose files (by default, compose.yaml).
+    // The project of the given Compose files.
     protected SampleProject(string[] composeFiles)
     {
         // test/GroundControl.Tests/bin/<configuration>/<framework> → test/GroundControl.Tests.Sample/bin/<configuration>/<framework>
@@ -47,7 +48,7 @@ public class SampleProject : IAsyncLifetime
     {
         if (this.Available)
         {
-            // The tests container GroundControl creates is labeled as a service of the project: an orphan, if a run has not removed it.
+            // The tests service is an orphan of the project without it (BareSampleProject).
             await this.RunComposeAsync(null, "down", "--remove-orphans");
         }
     }
@@ -167,5 +168,5 @@ public class SampleProject : IAsyncLifetime
     }
 }
 
-// The Docker Compose project of GroundControl.Tests.Sample declaring the tests service (compose.groundcontrol.yaml).
-public sealed class DeclaredSampleProject() : SampleProject(["compose.yaml", "compose.groundcontrol.yaml"]);
+// The Docker Compose project of GroundControl.Tests.Sample without the tests service (compose.yaml only).
+public sealed class BareSampleProject() : SampleProject(["compose.yaml"]);

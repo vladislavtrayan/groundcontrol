@@ -1,5 +1,4 @@
 using System.Formats.Tar;
-using System.Net;
 using System.Text;
 using Docker.DotNet;
 using Docker.DotNet.Models;
@@ -62,59 +61,6 @@ internal sealed class DockerEngine : IDisposable
         }
     }
 
-    /// <summary>Creates the container.</summary>
-    /// <returns>False if a container of its name exists.</returns>
-    public async Task<bool> CreateContainerAsync(CreateContainerParameters parameters, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await this.client.Containers.CreateContainerAsync(parameters, cancellationToken);
-            return true;
-        }
-        catch (DockerApiException e) when (e.StatusCode == HttpStatusCode.Conflict)
-        {
-            return false;
-        }
-    }
-
-    public Task StartContainerAsync(string container, CancellationToken cancellationToken) =>
-        this.client.Containers.StartContainerAsync(container, new ContainerStartParameters(), cancellationToken);
-
-    /// <summary>Removes the container, killing its processes, unless it is removed already (or being removed).</summary>
-    public async Task RemoveContainerAsync(string container, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await this.client.Containers.RemoveContainerAsync(container, new ContainerRemoveParameters { Force = true }, cancellationToken);
-        }
-        catch (DockerApiException e) when (e is DockerContainerNotFoundException || e.StatusCode == HttpStatusCode.Conflict)
-        {
-            // Removed already, or being removed.
-        }
-    }
-
-    public Task ConnectNetworkAsync(string network, string container, IList<string> aliases, CancellationToken cancellationToken) =>
-        this.client.Networks.ConnectNetworkAsync(
-            network, new NetworkConnectParameters { Container = container, EndpointConfig = new EndpointSettings { Aliases = aliases } }, cancellationToken);
-
-    /// <summary>Pulls the image unless present.</summary>
-    public async Task PullImageAsync(string image, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await this.client.Images.InspectImageAsync(image, cancellationToken);
-        }
-        catch (DockerImageNotFoundException)
-        {
-            var tag = image.LastIndexOf(':') is var colon && colon > image.LastIndexOf('/') ? colon : -1;
-            await this.client.Images.CreateImageAsync(
-                new ImagesCreateParameters { FromImage = tag < 0 ? image : image[..tag], Tag = tag < 0 ? "latest" : image[(tag + 1)..] },
-                null,
-                new Progress<JSONMessage>(),
-                cancellationToken);
-        }
-    }
-
     /// <summary>Writes the files (by their paths, creating their directories) into the container.</summary>
     public Task WriteFilesAsync(string container, IReadOnlyDictionary<string, string> files, CancellationToken cancellationToken)
     {
@@ -172,28 +118,6 @@ internal sealed class DockerEngine : IDisposable
         {
             // The container has been removed.
         }
-    }
-
-    /// <summary>The number of processes running within the container by docker exec.</summary>
-    public async Task<int> CountRunningExecsAsync(ContainerInspectResponse container, CancellationToken cancellationToken)
-    {
-        var running = 0;
-        foreach (var exec in container.ExecIDs ?? [])
-        {
-            try
-            {
-                if ((await this.client.Exec.InspectContainerExecAsync(exec, cancellationToken)).Running)
-                {
-                    running++;
-                }
-            }
-            catch (DockerApiException)
-            {
-                // Completed meanwhile.
-            }
-        }
-
-        return running;
     }
 
     public void Dispose() => this.client.Dispose();

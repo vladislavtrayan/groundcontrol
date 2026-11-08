@@ -12,8 +12,8 @@ internal static class ContainerProcess
     /// </summary>
     /// <returns>The end of the standard error of the process.</returns>
     /// <remarks>
-    /// Each test run has a directory of its own within the container (shared by test runs, and kept up if declared): its input lines and its
-    /// lease, which the test host renews while the test run is in progress, so the test process is killed if the test host dies.
+    /// Each test run has a directory of its own within the container (shared by test runs, and kept up with the project): its input lines
+    /// and its lease, which the test host renews while the test run is in progress, so the test process is killed if the test host dies.
     /// </remarks>
     public static async Task<string> RunAsync(
         DockerEngine docker,
@@ -30,18 +30,14 @@ internal static class ContainerProcess
         var inputLinesPath = $"{run}/test-cases.txt";
         var lease = $"{run}/lease";
 
-        ContainerExec process;
-        using (await container.PrepareAsync(docker, cancellationToken))
-        {
-            await docker.WriteFilesAsync(
-                container.Name,
-                new Dictionary<string, string> { [inputLinesPath] = string.Concat(inputLines.Select(line => line + '\n')), [lease] = "0" },
-                cancellationToken);
-            process = await docker.StartExecAsync(
-                container.Name,
-                container.Exec(assemblyPath[..assemblyPath.LastIndexOf('/')], run, ["dotnet", assemblyPath, .. arguments], [$"{inputLinesVariable}={inputLinesPath}"]),
-                cancellationToken);
-        }
+        await docker.WriteFilesAsync(
+            container.Name,
+            new Dictionary<string, string> { [inputLinesPath] = string.Concat(inputLines.Select(line => line + '\n')), [lease] = "0" },
+            cancellationToken);
+        var process = await docker.StartExecAsync(
+            container.Name,
+            container.Exec(assemblyPath[..assemblyPath.LastIndexOf('/')], run, ["dotnet", assemblyPath, .. arguments], [$"{inputLinesVariable}={inputLinesPath}"]),
+            cancellationToken);
 
         using var renewing = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var renewal = RenewAsync(docker, container.Name, lease, renewing.Token);
@@ -79,7 +75,6 @@ internal static class ContainerProcess
             await renewing.CancelAsync();
             await renewal;
             process.Dispose();
-            await container.ReleaseAsync(docker);
         }
     }
 

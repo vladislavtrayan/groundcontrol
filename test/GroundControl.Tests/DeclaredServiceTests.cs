@@ -6,7 +6,7 @@ namespace GroundControl.Tests;
 // kept up with the project: GroundControl runs the tests within it, and neither creates nor removes it.
 [Trait("Category", "Docker")]
 [Collection("Docker")]
-public class DeclaredServiceTests(DeclaredSampleProject sample) : IClassFixture<DeclaredSampleProject>
+public class DeclaredServiceTests(SampleProject sample) : IClassFixture<SampleProject>
 {
     private const string Container = "groundcontrol-sample-groundcontrol-1";
 

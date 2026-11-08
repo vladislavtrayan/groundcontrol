@@ -8,17 +8,12 @@ internal static class ComposeLabels
     public const string Project = "com.docker.compose.project";
     public const string Service = "com.docker.compose.service";
     public const string ProjectDirectory = "com.docker.compose.project.working_dir";
-    public const string OneOff = "com.docker.compose.oneoff";
-
-    /// <summary>The hash of the configuration of a container Docker Compose has created (for a service of the project), not of others.</summary>
-    public const string ConfigHash = "com.docker.compose.config-hash";
 
     public static string? Get(IDictionary<string, string>? labels, string name) => labels is not null && labels.TryGetValue(name, out var value) ? value : null;
 }
 
 /// <summary>
-/// A container of the Docker Compose project, as inspected: declared if Docker Compose has created it for a service of the project
-/// (rather than GroundControl), and the host directories mounted into it (bind mounts), with their paths within it.
+/// A container of the Docker Compose project, as inspected, with the host directories mounted into it (bind mounts) and their paths within it.
 /// </summary>
 internal sealed record ComposeContainer(
     string Id,
@@ -29,7 +24,6 @@ internal sealed record ComposeContainer(
     string Health,
     long ExitCode,
     IReadOnlyList<string> Networks,
-    bool Declared,
     IReadOnlyList<(string Source, string Destination)> Mounts)
 {
     /// <summary>Healthy, running without a healthcheck, or completed successfully (one-off services).</summary>
@@ -52,7 +46,6 @@ internal sealed record ComposeContainer(
             container.State?.Health?.Status is { } health && health != "none" ? health : string.Empty,
             container.State?.ExitCode ?? 0,
             container.NetworkSettings?.Networks?.Keys.ToList() ?? [],
-            ComposeLabels.Get(labels, ComposeLabels.ConfigHash) is not null,
             container.Mounts?
                 .Where(mount => mount.Type == "bind")
                 .Select(mount => (HostPath.FromMount(mount.Source, windowsHost), mount.Destination))

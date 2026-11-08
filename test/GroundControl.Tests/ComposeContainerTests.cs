@@ -36,31 +36,6 @@ public class ComposeContainerTests
         Assert.Equal("exited with 1", container.Status);
     }
 
-    // Docker Compose labels the containers it creates with the hash of their configuration, GroundControl does not: a container
-    // of the tests service is declared by the project or managed by GroundControl.
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void TellsDeclaredContainers(bool declared)
-    {
-        var labels = new Dictionary<string, string>
-        {
-            ["com.docker.compose.project"] = "sample",
-            ["com.docker.compose.service"] = "groundcontrol",
-            ["com.docker.compose.project.working_dir"] = "/src/sample",
-        };
-        if (declared)
-        {
-            labels[ComposeLabels.ConfigHash] = "4f2b";
-        }
-
-        var container = ComposeContainer.From(
-            new ContainerInspectResponse { ID = "abc", Name = "/sample-groundcontrol-1", Config = new Config { Labels = labels }, State = new ContainerState { Status = "running" } },
-            windowsHost: false);
-
-        Assert.Equal(declared, container.Declared);
-    }
-
     // The bind mounts of a container, by their host paths (as Docker Desktop on Windows reports them within its virtual machine).
     [Fact]
     public void ReadsBindMounts()
@@ -93,7 +68,7 @@ public class ComposeContainerTests
     [InlineData("created", "", 0, false, false)]
     public void ReportsReadiness(string state, string health, int exitCode, bool ready, bool failed)
     {
-        var container = new ComposeContainer("id", "name", "project", "service", state, health, exitCode, [], false, []);
+        var container = new ComposeContainer("id", "name", "project", "service", state, health, exitCode, [], []);
 
         Assert.Equal(ready, container.IsReady);
         Assert.Equal(failed, container.HasFailed);

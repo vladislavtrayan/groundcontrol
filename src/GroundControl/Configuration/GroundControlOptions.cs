@@ -29,19 +29,12 @@ public sealed record GroundControlOptions
     public string? ProjectDirectory { get; init; }
 
     /// <summary>
-    /// The service of the tests container, which the services reach the tests by (the tests are given it in <c>GROUNDCONTROL_CONTAINER</c>).
-    /// The test runs in progress share the container, as a host. If the project declares the service, its container runs the tests (kept up
-    /// with the project); otherwise, GroundControl creates one for the test runs and removes it after the last of them.
+    /// The tests service the project declares, whose container the test runs run within (kept up with the project), and which the services
+    /// reach the tests by (the tests are given it in <c>GROUNDCONTROL_CONTAINER</c>). The test runs in progress share the container, as a host.
     /// </summary>
     public string Container { get; init; } = "groundcontrol";
 
-    /// <summary>
-    /// The image of the tests container GroundControl creates (not of a declared tests service), with <c>sh</c>, <c>sleep</c>, <c>cat</c>
-    /// and <c>rm</c> (as the .NET images have); by default, the .NET (or ASP.NET Core) image of the test assembly runtime.
-    /// </summary>
-    public string? Image { get; init; }
-
-    /// <summary>The network of the tests container; by default, the one most services of the project are on.</summary>
+    /// <summary>The network the tests service is checked to be on; by default, the one most services of the project are on.</summary>
     public string? Network { get; init; }
 
     /// <summary>
@@ -87,7 +80,6 @@ public sealed record GroundControlOptions
             Project = Get(nameof(Project)),
             ProjectDirectory = Get(nameof(ProjectDirectory)),
             Container = Get(nameof(Container)) ?? defaults.Container,
-            Image = Get(nameof(Image)),
             Network = Get(nameof(Network)),
             ReadinessTimeout = Get(nameof(ReadinessTimeout)) is { } timeout
                 ? int.TryParse(timeout, out var seconds) ? TimeSpan.FromSeconds(seconds) : TimeSpan.Parse(timeout, CultureInfo.InvariantCulture)

@@ -3,11 +3,11 @@ using Docker.DotNet.Models;
 namespace GroundControl.Docker;
 
 /// <summary>
-/// The container the test runs run within, as on a host, on the network of the Docker Compose project, where the services reach the tests
-/// by the service name (<see cref="GroundControl.Configuration.GroundControlOptions.Container"/>): either the one GroundControl manages
-/// for the test runs (<see cref="ManagedTestContainer"/>), or the one of the tests service the project declares (<see cref="ServiceTestContainer"/>).
+/// The container of the tests service the Docker Compose project declares, which the test runs run within as on a host, kept up with
+/// the project (GroundControl neither creates nor removes it), on the network of the project, where the services reach the tests by
+/// the service name (<see cref="GroundControl.Configuration.GroundControlOptions.Container"/>).
 /// </summary>
-internal abstract class TestContainer(string name, string service, string network, IReadOnlyList<(string Source, string Destination)> mounts)
+internal sealed class TestContainer(string name, string service, string network, IReadOnlyList<(string Source, string Destination)> mounts)
 {
     /// <summary>The script running a test process within the container (see run.sh).</summary>
     private static readonly Lazy<string> RunScript = new(() =>
@@ -22,11 +22,24 @@ internal abstract class TestContainer(string name, string service, string networ
 
     public string Network => network;
 
-    /// <summary>Prepares the container for a test run; the handle is held until the test process has started within it.</summary>
-    public virtual Task<IDisposable> PrepareAsync(DockerEngine docker, CancellationToken cancellationToken) => Task.FromResult<IDisposable>(NoHandle.Instance);
+    /// <summary>
+    /// Checks that the container runs the tests of the assembly: it mounts the assembly, and has <c>sh</c> (which test processes are run by)
+    /// and the runtimes of the assembly; otherwise, the image is suggested.
+    /// </summary>
+    public async Task CheckAsync(DockerEngine docker, string assemblyPath, string image, CancellationToken cancellationToken)
+    {
+        this.MapPath(assemblyPath);
+        if ((await docker.ExecAsync(this.Name, ["sh", "-c", "exit 0"], cancellationToken)).ExitCode != 0)
+        {
+            throw new InvalidOperationException($"The {service} service has no sh, which GroundControl runs the tests by: use an image with it, such as {image}.");
+        }
 
-    /// <summary>Releases the container once a test run has completed within it.</summary>
-    public virtual Task ReleaseAsync(DockerEngine docker) => Task.CompletedTask;
+        var runtimes = await docker.ExecAsync(this.Name, ["sh", "-c", "dotnet --list-runtimes"], cancellationToken);
+        if (DotNetRuntimes.MissingFrameworks(DotNetRuntimes.GetFrameworks(assemblyPath), runtimes.Output) is { Count: > 0 } missing)
+        {
+            throw new InvalidOperationException($"The {service} service has no {string.Join(" and ", missing)}: use {image}.");
+        }
+    }
 
     /// <summary>
     /// The process running the command of a test run within the container (see run.sh), with the directory of the test run
@@ -52,18 +65,7 @@ internal abstract class TestContainer(string name, string service, string networ
             }
         }
 
-        throw new InvalidOperationException(this.NotMounted(path));
-    }
-
-    /// <summary>The message of a path of the host not mounted into the container.</summary>
-    protected abstract string NotMounted(string path);
-
-    private sealed class NoHandle : IDisposable
-    {
-        public static readonly NoHandle Instance = new();
-
-        public void Dispose()
-        {
-        }
+        throw new InvalidOperationException(
+            $"The {service} service does not mount the directory of {path}: mount the project directory into it, e.g., '- .:/workspace:ro' in its volumes.");
     }
 }

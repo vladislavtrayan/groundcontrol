@@ -2,8 +2,7 @@ using Xunit;
 
 namespace GroundControl.Tests;
 
-// Runs GroundControl.Tests.Sample by GroundControl within its Docker Compose project, as test runners run test assemblies,
-// within the tests container GroundControl creates (the project does not declare the tests service).
+// Runs GroundControl.Tests.Sample by GroundControl within its Docker Compose project, as test runners run test assemblies.
 [Trait("Category", "Docker")]
 [Collection("Docker")]
 public class SampleProjectTests(SampleProject sample) : IClassFixture<SampleProject>
@@ -26,52 +25,7 @@ public class SampleProjectTests(SampleProject sample) : IClassFixture<SampleProj
         Assert.Equal(Tests, finished.GetProperty("TestsTotal").GetInt32() - finished.GetProperty("TestsNotRun").GetInt32());
     }
 
-    // Test runs of the project started together (e.g., test projects of a solution, once the project is ready) run within one tests container
-    // at the same time, as on a host, so the services reach them by one name; the last of them removes the container.
-    [Fact]
-    public async Task SharesContainerAmongRuns()
-    {
-        string[] test = ["-method", "GroundControl.Tests.Sample.NetworkTests.MeetsOtherRuns", "-explicit", "only"];
-
-        var runs = Task.WhenAll(Enumerable.Range(0, 3).Select(_ => sample.RunAsync(test)));
-        var most = 0;
-        while (!runs.IsCompleted)
-        {
-            most = Math.Max(most, (await this.TestContainersAsync()).Count);
-            await Task.Delay(100, TestContext.Current.CancellationToken);
-        }
-
-        Assert.All(await runs, run => Assert.Empty(run.Of("test-failed")));
-        Assert.All(await runs, run => Assert.Single(run.Of("test-passed")));
-        Assert.Equal(1, most);
-        Assert.Empty(await this.TestContainersAsync());
-    }
-
-    // A tests container left over (exited, not removed) does not block the next run, which replaces it.
-    [Fact]
-    public async Task ReplacesContainerLeftOver()
-    {
-        var leftOver = await sample.DockerAsync(
-            "create", "--name", "groundcontrol-sample-groundcontrol-1",
-            "--label", "com.docker.compose.project=groundcontrol-sample", "--label", "com.docker.compose.service=groundcontrol",
-            "mcr.microsoft.com/dotnet/runtime:8.0", "true");
-        Assert.True(leftOver.ExitCode == 0, leftOver.Error);
-        Assert.Equal(0, (await sample.DockerAsync("start", "--attach", "groundcontrol-sample-groundcontrol-1")).ExitCode);
-
-        var run = await sample.RunAsync(["-method", "GroundControl.Tests.Sample.NetworkTests.RunsWithinContainer"]);
-
-        Assert.Equal(0, run.ExitCode);
-        Assert.Single(run.Of("test-passed"));
-        Assert.Empty(await this.TestContainersAsync());
-    }
-
-    // The tests containers of the sample project.
-    private async Task<List<string>> TestContainersAsync() =>
-        (await sample.DockerAsync(
-            "ps", "--all", "--filter", "label=com.docker.compose.project=groundcontrol-sample", "--filter", "label=com.docker.compose.service=groundcontrol",
-            "--format", "{{.Names}}")).Output;
-
-    // The services of the project call the tests by the name of the tests container: the sample test waits for the call of the web service,
+    // The services of the project call the tests by the name of the tests service: the sample test waits for the call of the web service,
     // so the run is in progress until the call reaches it.
     [Fact]
     public async Task IsCalledByNameFromServices()
@@ -87,7 +41,7 @@ public class SampleProjectTests(SampleProject sample) : IClassFixture<SampleProj
         Assert.Single(result.Of("test-passed"));
     }
 
-    // Calls the URL from the web service until it succeeds or the run completes (the tests container exists once the run has started).
+    // Calls the URL from the web service until it succeeds or the run completes (the test listens once the run has started).
     private async Task<(int ExitCode, List<string> Output, string Error)> CallAsync(string url, Task<SampleRun> run)
     {
         var call = (ExitCode: -1, Output: new List<string>(), Error: "The run has completed before the call.");
@@ -148,6 +102,25 @@ public class SampleProjectTests(SampleProject sample) : IClassFixture<SampleProj
         Assert.NotEmpty(run.Of("error"));
         Assert.Empty(run.Of("test-passed"));
         Assert.NotEmpty(run.Of("test-failed"));
+        Assert.NotEqual(0, run.ExitCode);
+    }
+}
+
+// Runs GroundControl.Tests.Sample within its Docker Compose project without the tests service (compose.yaml only).
+[Trait("Category", "Docker")]
+[Collection("Docker")]
+public class BareSampleProjectTests(BareSampleProject sample) : IClassFixture<BareSampleProject>
+{
+    // A project not declaring the tests service fails the test run with how to declare it.
+    [Fact]
+    public async Task FailsWithoutDeclaredService()
+    {
+        var run = await sample.RunAsync(["-method", "GroundControl.Tests.Sample.NetworkTests.RunsWithinContainer"]);
+
+        var message = Assert.Single(run.Of("error")).GetProperty("Messages")[0].GetString();
+        Assert.Contains("does not declare the groundcontrol service", message);
+        Assert.Contains("mcr.microsoft.com/dotnet/runtime:8.0", message);
+        Assert.Empty(run.Of("test-passed"));
         Assert.NotEqual(0, run.ExitCode);
     }
 }
