@@ -12,15 +12,16 @@ namespace GroundControl.Docker;
 /// </summary>
 internal sealed class DockerEngine : IDisposable
 {
+    private static readonly SemaphoreSlim InspectConcurrency = new(4);
     private readonly string endpoint;
     private readonly DockerClient client;
 
     public DockerEngine(GroundControlOptions options)
     {
         this.endpoint = DockerEndpoint.Resolve(options.DockerHost, options.DockerContext, DockerEndpoint.ConfigDirectory, OperatingSystem.IsWindows());
-        this.client = new DockerClientConfiguration(new Uri(this.endpoint)).CreateClient();
+        this.client = new DockerClientConfiguration(new Uri(this.endpoint), namedPipeConnectTimeout: options.ReadinessTimeout).CreateClient();
     }
-
+    
     /// <summary>The containers having the label (<c>name</c>, or <c>name=value</c>), as inspected.</summary>
     public async Task<List<ContainerInspectResponse>> InspectContainersAsync(string label, CancellationToken cancellationToken)
     {
@@ -40,8 +41,23 @@ internal sealed class DockerEngine : IDisposable
     }
 
     /// <summary>The containers (by their IDs), as inspected, at once; null for one removed meanwhile.</summary>
-    public async Task<List<ContainerInspectResponse?>> InspectContainersAsync(IEnumerable<string> containers, CancellationToken cancellationToken) =>
-        [.. await Task.WhenAll(containers.Select(container => this.InspectContainerAsync(container, cancellationToken)))];
+    public async Task<List<ContainerInspectResponse?>> InspectContainersAsync(IEnumerable<string> containers,
+        CancellationToken cancellationToken) =>
+    [
+        .. await Task.WhenAll(
+            containers.Select(async container =>
+            {
+                await InspectConcurrency.WaitAsync(cancellationToken);
+                try
+                {
+                    return await this.InspectContainerAsync(container, cancellationToken);
+                }
+                finally
+                {
+                    InspectConcurrency.Release();
+                }
+            }))
+    ];
 
     /// <summary>The container (by its name or ID), as inspected, or null if absent.</summary>
     public async Task<ContainerInspectResponse?> InspectContainerAsync(string container, CancellationToken cancellationToken)
